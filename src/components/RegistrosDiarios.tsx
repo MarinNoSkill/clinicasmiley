@@ -1,8 +1,8 @@
-// src/components/RegistrosDiarios.tsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DentalRecord } from '../types';
 import { formatCOP, fetchDoctors, fetchAssistants, fetchServices, fetchPaymentMethods } from '../data/constants';
+import { useNavigate } from 'react-router-dom';
 
 interface RegistrosDiariosProps {
   registros: DentalRecord[];
@@ -20,12 +20,13 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [error, setError] = useState<string>('');
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
   const [esAuxiliar, setEsAuxiliar] = useState<boolean>(false);
-  const [esPacientePropio, setEsPacientePropio] = useState<boolean>(true);
+  const [esPacientePropio, setEsPacientePropio] = useState<boolean>(false); // Cambiado a false por defecto
   const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
   const [descuentoInput, setDescuentoInput] = useState<string>('0');
   const [esPorcentaje, setEsPorcentaje] = useState<boolean>(false);
   const [aplicarAbono, setAplicarAbono] = useState<boolean>(false);
   const [abonoInput, setAbonoInput] = useState<string>('0');
+  const [valorPagado, setValorPagado] = useState<string>(''); // Nuevo estado para el valor pagado
 
   const [formData, setFormData] = useState({
     nombreDoctor: '',
@@ -38,48 +39,103 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     metodoPago: '',
   });
 
-useEffect(() => {
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [doctors, assistants, services, paymentMethods, records] = await Promise.all([
-        fetchDoctors(),
-        fetchAssistants(),
-        fetchServices(),
-        fetchPaymentMethods(), // Esto ya debería devolver los descpMetodo
-        axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }),
-      ]);
+  const navigate = useNavigate();
+  const id_sede = localStorage.getItem('selectedSede');
 
-      setDoctores(doctors);
-      setAsistentes(assistants);
-      setServicios(services);
-      setMetodosPago(paymentMethods); // paymentMethods contiene los descpMetodo
-      setRegistros(records.data);
-
-      setFormData((prev) => ({
-        ...prev,
-        nombreDoctor: doctors[0] || '',
-        servicio: services[0]?.nombre || '',
-        metodoPago: paymentMethods[0] || '',
-      }));
-    } catch {
-      setError('Error al cargar los datos. Por favor, intenta de nuevo.');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!id_sede) {
+      navigate('/sedes');
+      return;
     }
-  };
 
-  loadData();
-}, [setRegistros]);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [doctors, assistants, services, paymentMethods, records] = await Promise.all([
+          fetchDoctors(id_sede),
+          fetchAssistants(id_sede),
+          fetchServices(),
+          fetchPaymentMethods(),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
+            params: { id_sede },
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          }),
+        ]);
+
+        setDoctores(doctors);
+        setAsistentes(assistants);
+        setServicios(services);
+        setMetodosPago(paymentMethods);
+        setRegistros(records.data);
+
+        // No preseleccionamos nada al inicio
+        setFormData({
+          nombreDoctor: '',
+          nombrePaciente: '',
+          docId: '',
+          servicio: '',
+          abono: null,
+          descuento: null,
+          fecha: hoy,
+          metodoPago: '',
+        });
+      } catch (err) {
+        setError('Error al cargar los datos. Por favor, intenta de nuevo.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [setRegistros, id_sede, navigate]);
+
+  // Limpiar selección de doctor/asistente cuando cambie el estado de "Es auxiliar"
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      nombreDoctor: '', // Limpiar selección al cambiar entre doctor y auxiliar
+    }));
+  }, [esAuxiliar]);
+
+  // Limpiar el valor pagado si no hay método de pago seleccionado
+  useEffect(() => {
+    if (!formData.metodoPago) {
+      setValorPagado('');
+    }
+  }, [formData.metodoPago]);
+
+  const resetForm = () => {
+    setFormData({
+      nombreDoctor: '',
+      nombrePaciente: '',
+      docId: '',
+      servicio: '',
+      abono: null,
+      descuento: null,
+      fecha: hoy,
+      metodoPago: '',
+    });
+    setEsAuxiliar(false);
+    setEsPacientePropio(false);
+    setAplicarDescuento(false);
+    setDescuentoInput('0');
+    setEsPorcentaje(false);
+    setAplicarAbono(false);
+    setAbonoInput('0');
+    setValorPagado('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Calcular el descuento si es porcentaje
+      // Validar el valor pagado si hay un método de pago seleccionado
+      if (formData.metodoPago && !valorPagado) {
+        setError('Por favor, ingresa el valor pagado.');
+        return;
+      }
+
       let descuentoFinal: number | null = null;
       if (aplicarDescuento) {
         const descuentoValue = parseFloat(descuentoInput);
@@ -104,6 +160,8 @@ useEffect(() => {
         fecha: fechaSeleccionada,
         metodoPago: formData.metodoPago,
         esAuxiliar: esAuxiliar,
+        id_sede: parseInt(id_sede, 10),
+        valorPagado: formData.metodoPago ? parseFloat(valorPagado) : null, // Incluir valor pagado
       };
 
       const response = await axios.post(
@@ -117,19 +175,8 @@ useEffect(() => {
       );
 
       setRegistros([...registros, response.data]);
-      setFormData({
-        ...formData,
-        nombrePaciente: '',
-        docId: '',
-        abono: null,
-        descuento: null,
-      });
-      setAplicarDescuento(false);
-      setDescuentoInput('0');
-      setAplicarAbono(false);
-      setAbonoInput('0');
-      setEsPacientePropio(true);
-    } catch {
+      resetForm(); // Reiniciar el formulario después de guardar
+    } catch (err) {
       setError('Error al guardar el registro. Por favor, intenta de nuevo.');
     }
   };
@@ -145,12 +192,12 @@ useEffect(() => {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        data: { ids: selectedRecords },
+        data: { ids: selectedRecords, id_sede: parseInt(id_sede, 10) },
       });
 
       setRegistros(registros.filter((registro) => !selectedRecords.includes(registro.id)));
       setSelectedRecords([]);
-    } catch {
+    } catch (err) {
       setError('Error al eliminar los registros. Por favor, intenta de nuevo.');
     }
   };
@@ -199,7 +246,7 @@ useEffect(() => {
               checked={esAuxiliar}
               onChange={(e) => {
                 setEsAuxiliar(e.target.checked);
-                setEsPacientePropio(true); // Resetear el checkbox de paciente propio al cambiar
+                setEsPacientePropio(false); // Reiniciar este valor también
               }}
               className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -213,7 +260,9 @@ useEffect(() => {
               value={formData.nombreDoctor}
               onChange={(e) => setFormData({ ...formData, nombreDoctor: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
             >
+              <option value="">Selecciona un {esAuxiliar ? 'auxiliar' : 'doctor'}</option>
               {(esAuxiliar ? asistentes : doctores).map((profesional) => (
                 <option key={profesional} value={profesional}>
                   {profesional}
@@ -250,7 +299,9 @@ useEffect(() => {
               value={formData.servicio}
               onChange={(e) => setFormData({ ...formData, servicio: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              required
             >
+              <option value="">Selecciona un servicio</option>
               {servicios.map((servicio) => (
                 <option key={servicio.nombre} value={servicio.nombre}>
                   {servicio.nombre} ({formatCOP(servicio.precio)})
@@ -331,12 +382,27 @@ useEffect(() => {
               onChange={(e) => setFormData({ ...formData, metodoPago: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
+              <option value="">Selecciona un método de pago</option>
               {metodosPago.map((metodo) => (
                 <option key={metodo} value={metodo}>
                   {metodo}
                 </option>
               ))}
             </select>
+            {formData.metodoPago && (
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pagado (COP)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={valorPagado}
+                  onChange={(e) => setValorPagado(e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            )}
           </div>
 
           {!esAuxiliar && (

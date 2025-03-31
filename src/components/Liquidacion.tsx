@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DentalRecord } from '../types';
 import { fetchDoctors, fetchServices, formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
+import { useNavigate } from 'react-router-dom'; // Importar useNavigate
 
 interface LiquidacionProps {
   registros: DentalRecord[];
@@ -33,14 +33,25 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
+  const navigate = useNavigate(); // Agregar useNavigate
+  const id_sede = localStorage.getItem('selectedSede'); // Obtener id_sede
+
   useEffect(() => {
+    if (!id_sede) {
+      console.log('No se encontró id_sede, redirigiendo a /sedes');
+      navigate('/sedes');
+      return;
+    }
+
     const loadData = async () => {
       try {
         setLoading(true);
+        console.log('Haciendo solicitud a /api/records con id_sede:', id_sede);
         const [doctors, services, records] = await Promise.all([
-          fetchDoctors(),
+          fetchDoctors(id_sede), // Pasar id_sede
           fetchServices(),
           axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
+            params: { id_sede }, // Incluir id_sede en la solicitud
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,
             },
@@ -51,7 +62,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         setServicios(services);
         setDoctorSeleccionado(doctors[0] || '');
         setRegistros(records.data);
-      } catch{
+      } catch (err) {
+        console.error('Error al cargar los datos:', err);
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
       } finally {
         setLoading(false);
@@ -59,8 +71,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     };
 
     loadData();
-  }, [setRegistros]);
+  }, [setRegistros, id_sede, navigate]); // Agregar id_sede y navigate a las dependencias
 
+  // Resto del código sigue igual...
   const pacientesUnicos = [...new Set(registros.map((registro) => registro.nombrePaciente))].sort();
   const serviciosUnicos = [...new Set(registros.map((registro) => registro.servicio))].sort();
 
@@ -85,18 +98,18 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   );
 
   const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) => {
-    const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar;
+    const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar || 1; // Ajustar si no existe
     const totalSesionesCompletadas = grupo.reduce(
-      (sum, registro) => sum + registro.sesionesCompletadas,
+      (sum, registro) => sum + (registro.sesionesCompletadas || 1),
       0
     );
     return totalSesionesCompletadas >= totalSesionesParaCompletar;
   });
 
   const serviciosPendientes = Object.values(registrosAgrupados).filter((grupo) => {
-    const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar;
+    const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar || 1;
     const totalSesionesCompletadas = grupo.reduce(
-      (sum, registro) => sum + registro.sesionesCompletadas,
+      (sum, registro) => sum + (registro.sesionesCompletadas || 1),
       0
     );
     return totalSesionesCompletadas < totalSesionesParaCompletar;
@@ -127,7 +140,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         fecha_liquidacion: new Date().toISOString().split('T')[0],
       };
 
-      // Save liquidation to the backend
+      // Guardar liquidación en el backend
       await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
         nuevaLiquidacion,
@@ -138,22 +151,23 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
-      // Delete liquidated records
+      // Eliminar registros liquidados
       const idsServiciosLiquidados = serviciosCompletados
         .flatMap((grupo) => grupo.map((registro) => registro.id));
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        data: { ids: idsServiciosLiquidados },
+        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) }, // Incluir id_sede
       });
 
-      // Update local state
+      // Actualizar estado local
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
       setRegistros(registrosRestantes);
-    } catch  {
+    } catch (err) {
+      console.error('Error al liquidar:', err);
       setError('Error al liquidar los servicios. Por favor, intenta de nuevo.');
     }
   };
@@ -168,7 +182,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     const datos = datosExcel.flatMap((grupo, index) => {
       const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
       const totalSesionesCompletadas = grupo.reduce(
-        (sum, registro) => sum + registro.sesionesCompletadas,
+        (sum, registro) => sum + (registro.sesionesCompletadas || 1),
         0
       );
       const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
@@ -178,7 +192,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       return {
         Paciente: grupo[0].nombrePaciente,
         Servicio: grupo[0].servicio,
-        'Progreso Sesiones': `${totalSesionesCompletadas}/${grupo[0].sesionesParaCompletar}`,
+        'Progreso Sesiones': `${totalSesionesCompletadas}/${grupo[0].sesionesParaCompletar || 1}`,
         'Total Pagado': totalGrupo,
         'Método de Pago': metodosPago,
         'Tipo de Paciente': grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)',
@@ -362,7 +376,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                 {serviciosLiquidados.map((grupo, index) => {
                   const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
                   const totalSesionesCompletadas = grupo.reduce(
-                    (sum, registro) => sum + registro.sesionesCompletadas,
+                    (sum, registro) => sum + (registro.sesionesCompletadas || 1),
                     0
                   );
                   const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
@@ -378,7 +392,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {grupo[0].servicio}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar}
+                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar || 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCOP(totalGrupo)}
@@ -392,7 +406,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {porcentaje}%
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold text-green-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
                         {formatCOP(totalALiquidar)}
                       </td>
                     </tr>
@@ -442,7 +456,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                 {serviciosCompletados.map((grupo, index) => {
                   const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
                   const totalSesionesCompletadas = grupo.reduce(
-                    (sum, registro) => sum + registro.sesionesCompletadas,
+                    (sum, registro) => sum + (registro.sesionesCompletadas || 1),
                     0
                   );
                   const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
@@ -458,7 +472,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {grupo[0].servicio}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar}
+                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar || 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCOP(totalGrupo)}
@@ -516,7 +530,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                 {serviciosPendientes.map((grupo, index) => {
                   const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
                   const totalSesionesCompletadas = grupo.reduce(
-                    (sum, registro) => sum + registro.sesionesCompletadas,
+                    (sum, registro) => sum + (registro.sesionesCompletadas || 1),
                     0
                   );
                   const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
@@ -530,7 +544,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {grupo[0].servicio}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar}
+                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar || 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCOP(totalGrupo)}
