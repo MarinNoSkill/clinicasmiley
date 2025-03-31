@@ -2,14 +2,25 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import SedesNavbar from './components/SedesNavbar';
 import RegistrosDiarios from './components/RegistrosDiarios';
 import Liquidacion from './components/Liquidacion';
 import EstandarizacionServicios from './components/EstandarizacionServicios';
 import HistorialLiquidaciones from './components/HistorialLiquidaciones';
 import Login from './components/Login';
+import Sedes from './components/Sedes';
 import { DentalRecord } from './types';
 
 const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const selectedSede = localStorage.getItem('selectedSede');
+
+  if (!token) return <Navigate to="/login" />;
+  if (!selectedSede) return <Navigate to="/sedes" />;
+  return children;
+};
+
+const AuthRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
 };
@@ -24,17 +35,32 @@ function App() {
     }
   }, []);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('selectedSede');
+    window.location.href = '/login';
+  };
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
+            path="/sedes"
+            element={
+              <AuthRoute>
+                <Sedes />
+              </AuthRoute>
+            }
+          />
+          <Route
             path="/"
             element={
               <ProtectedRoute>
                 <>
-                  <Navbar />
+                  <Navbar onLogout={handleLogout} />
                   <RegistrosDiarios registros={registros} setRegistros={setRegistros} />
                 </>
               </ProtectedRoute>
@@ -45,7 +71,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <>
-                  <Navbar />
+                  <Navbar onLogout={handleLogout} />
                   <Liquidacion registros={registros} setRegistros={setRegistros} />
                 </>
               </ProtectedRoute>
@@ -56,7 +82,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <>
-                  <Navbar />
+                  <Navbar onLogout={handleLogout} />
                   <EstandarizacionServicios />
                 </>
               </ProtectedRoute>
@@ -67,13 +93,13 @@ function App() {
             element={
               <ProtectedRoute>
                 <>
-                  <Navbar />
+                  <Navbar onLogout={handleLogout} />
                   <HistorialLiquidaciones />
                 </>
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/sedes" />} />
         </Routes>
       </div>
     </Router>

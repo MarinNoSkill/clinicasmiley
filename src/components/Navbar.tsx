@@ -1,13 +1,21 @@
+// frontend/src/components/Navbar.tsx
+import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
-const Navbar = () => {
+interface NavbarProps {
+  onLogout: () => void;
+}
+
+const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    navigate('/login');
+    localStorage.removeItem('selectedSede'); // Limpiamos la sede al cerrar sesión
+    onLogout(); // Llamamos a la función onLogout pasada desde App.tsx
+    navigate('/sedes'); // Redirigimos a /sedes
   };
 
   return (

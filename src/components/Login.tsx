@@ -1,3 +1,4 @@
+// frontend/src/components/Login.tsx
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -7,23 +8,31 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  interface LoginResponse {
+    token: string;
+    user: {
+      id: number;
+      usuario: string;
+      // otras propiedades de user
+    };
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/login`, {
-        usuario,
-        clave,
-      });
-
+      const response = await axios.post<LoginResponse>(
+        `${import.meta.env.VITE_API_URL}/api/login`,
+        { usuario, clave }
+      );
       const { token, user } = response.data;
 
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
 
-      window.location.href = '/';
+      window.location.href = '/'; // Redirigir a la página principal después del login
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al iniciar sesión');
     } finally {
