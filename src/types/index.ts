@@ -1,23 +1,24 @@
 // src/types/index.ts
 export interface DentalRecord {
   id: string;
-  nombreDoctor: string; // Nombre del doctor/a
-  nombreAsistente: string; // Nombre del asistente
-  nombrePaciente: string; // Nombre del paciente
-  servicio: string; // Servicio realizado
-  sesionesParaCompletar: number; // Total de sesiones necesarias para completar el servicio
-  sesionesCompletadas: number; // Sesiones completadas hasta ahora
-  abono: number; // Abono por sesión
-  descuento: number; // Descuento (si aplica)
-  total: number; // Total (abono - descuento) por sesión
-  esPacientePropio: boolean; // Si es paciente propio del doctor o del dueño
-  fecha: string; // Fecha del registro
-  metodoPago: string; // Método de pago
+  nombreDoctor: string; // nombre_doc
+  nombrePaciente: string; // paciente
+  docId: string; // doc_id (documento del paciente)
+  servicio: string; // nombre_serv
+  abono: number | null; // abono (puede ser null si no hay abono)
+  descuento: number | null; // dcto (puede ser null si no hay descuento)
+  total: number; // valor_total
+  fecha: string; // fecha_inicio
+  metodoPago: string; // metodo_pago
+  idPorc: number; // id_porc (obligatorio, se asignará según el porcentaje)
+  fechaFinal?: string; // fecha_final (opcional, no se usará en el formulario)
 }
 
 export interface Liquidacion {
-  nombreDoctor: string;
+  doctor: string;
+  fechaInicio: string;
+  fechaFin: string;
   servicios: DentalRecord[];
-  porcentaje: number; // Porcentaje aplicado (50% o 40%)
-  totalALiquidar: number; // Total a liquidar
+  totalLiquidado: number;
+  fechaLiquidacion: string;
 }
