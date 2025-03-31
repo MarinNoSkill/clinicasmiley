@@ -1,59 +1,77 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
 
 interface DentalRecord {
   id: string;
-  nombreDoctor: string;
-  nombreAsistente: string;
-  nombrePaciente: string;
+  nombre_doctor: string;
+  nombre_asistente: string;
+  nombre_paciente: string;
   servicio: string;
-  sesionesParaCompletar: number;
-  sesionesCompletadas: number;
+  sesiones_para_completar: number;
+  sesiones_completadas: number;
   abono: number;
   descuento: number;
   total: number;
-  esPacientePropio: boolean;
+  es_paciente_propio: boolean;
   fecha: string;
-  metodoPago: string;
+  metodo_pago: string;
 }
 
 interface LiquidacionHistorial {
   id: string;
   doctor: string;
-  fechaInicio: string;
-  fechaFin: string;
+  fecha_inicio: string;
+  fecha_fin: string;
   servicios: DentalRecord[][];
-  totalLiquidado: number;
-  fechaLiquidacion: string;
+  total_liquidado: number;
+  fecha_liquidacion: string;
 }
 
 const HistorialLiquidaciones: React.FC = () => {
   const [historial, setHistorial] = useState<LiquidacionHistorial[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    const historialGuardado = JSON.parse(localStorage.getItem('historialLiquidaciones') || '[]');
-    setHistorial(historialGuardado);
+    const loadHistorial = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        setHistorial(response.data);
+      } catch {
+        setError('Error al cargar el historial de liquidaciones. Por favor, intenta de nuevo.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHistorial();
   }, []);
 
   const handleDescargarExcel = (liquidacion: LiquidacionHistorial) => {
     const datos = liquidacion.servicios.flatMap((grupo) => {
       const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
       const totalSesionesCompletadas = grupo.reduce(
-        (sum, registro) => sum + registro.sesionesCompletadas,
+        (sum, registro) => sum + registro.sesiones_completadas,
         0
       );
-      const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
+      const porcentaje = grupo[0].es_paciente_propio ? 50 : 40;
       const totalALiquidar = totalGrupo * (porcentaje / 100);
-      const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
+      const metodosPago = [...new Set(grupo.map((registro) => registro.metodo_pago))].join(', ');
 
       return {
-        Paciente: grupo[0].nombrePaciente,
+        Paciente: grupo[0].nombre_paciente,
         Servicio: grupo[0].servicio,
-        'Progreso Sesiones': `${totalSesionesCompletadas}/${grupo[0].sesionesParaCompletar}`,
+        'Progreso Sesiones': `${totalSesionesCompletadas}/${grupo[0].sesiones_para_completar}`,
         'Total Pagado': totalGrupo,
         'Método de Pago': metodosPago,
-        'Tipo de Paciente': grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)',
+        'Tipo de Paciente': grupo[0].es_paciente_propio ? 'Propio (50%)' : 'Clínica (40%)',
         Porcentaje: `${porcentaje}%`,
         'Total a Liquidar': totalALiquidar,
       };
@@ -64,9 +82,17 @@ const HistorialLiquidaciones: React.FC = () => {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Liquidación');
     XLSX.writeFile(
       workbook,
-      `Historial_Liquidacion_${liquidacion.doctor}_${liquidacion.fechaLiquidacion}.xlsx`
+      `Historial_Liquidacion_${liquidacion.doctor}_${liquidacion.fecha_liquidacion}.xlsx`
     );
   };
+
+  if (loading) {
+    return <div className="text-center py-6">Cargando historial...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-6 text-red-500">{error}</div>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -83,13 +109,13 @@ const HistorialLiquidaciones: React.FC = () => {
                   Liquidación - {liquidacion.doctor}
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Fecha de Liquidación: {liquidacion.fechaLiquidacion}
+                  Fecha de Liquidación: {liquidacion.fecha_liquidacion}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Rango: {liquidacion.fechaInicio} a {liquidacion.fechaFin}
+                  Rango: {liquidacion.fecha_inicio} a {liquidacion.fecha_fin}
                 </p>
                 <p className="text-sm font-semibold text-blue-800">
-                  Total Liquidado: {formatCOP(liquidacion.totalLiquidado)}
+                  Total Liquidado: {formatCOP(liquidacion.total_liquidado)}
                 </p>
               </div>
               <button
@@ -134,23 +160,23 @@ const HistorialLiquidaciones: React.FC = () => {
                   {liquidacion.servicios.map((grupo, index) => {
                     const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
                     const totalSesionesCompletadas = grupo.reduce(
-                      (sum, registro) => sum + registro.sesionesCompletadas,
+                      (sum, registro) => sum + registro.sesiones_completadas,
                       0
                     );
-                    const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
+                    const porcentaje = grupo[0].es_paciente_propio ? 50 : 40;
                     const totalALiquidar = totalGrupo * (porcentaje / 100);
-                    const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
+                    const metodosPago = [...new Set(grupo.map((registro) => registro.metodo_pago))].join(', ');
 
                     return (
                       <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {grupo[0].nombrePaciente}
+                          {grupo[0].nombre_paciente}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {grupo[0].servicio}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar}
+                          {totalSesionesCompletadas}/{grupo[0].sesiones_para_completar}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatCOP(totalGrupo)}
@@ -159,7 +185,7 @@ const HistorialLiquidaciones: React.FC = () => {
                           {metodosPago}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
+                          {grupo[0].es_paciente_propio ? 'Propio (50%)' : 'Clínica (40%)'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {porcentaje}%

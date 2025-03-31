@@ -1,8 +1,40 @@
-// src/components/EstandarizacionServicios.tsx
-import React from 'react';
-import { SERVICIOS, formatCOP } from '../data/constants';
+import React, { useState, useEffect } from 'react';
+import { formatCOP, fetchServices } from '../data/constants';
+
+interface Service {
+  nombre: string;
+  precio: number;
+}
 
 const EstandarizacionServicios: React.FC = () => {
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    const loadServices = async () => {
+      try {
+        setLoading(true);
+        const fetchedServices = await fetchServices();
+        setServices(fetchedServices);
+      } catch {
+        setError('Error al cargar los servicios. Por favor, intenta de nuevo.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadServices();
+  }, []);
+
+  if (loading) {
+    return <div className="text-center py-6">Cargando servicios...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-6 text-red-500">{error}</div>;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-2xl font-bold mb-6">Estandarización de Servicios - Clínica Smiley</h2>
@@ -22,7 +54,7 @@ const EstandarizacionServicios: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {SERVICIOS.map((servicio, index) => (
+              {services.map((servicio, index) => (
                 <tr key={index}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {servicio.nombre}

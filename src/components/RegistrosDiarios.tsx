@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { DentalRecord } from '../types';
-import { DOCTORES, ASISTENTES, SERVICIOS, METODOS_PAGO, formatCOP } from '../data/constants';
+import { formatCOP, fetchDoctors, fetchAssistants, fetchServices, fetchPaymentMethods } from '../data/constants';
 
 interface RegistrosDiariosProps {
   registros: DentalRecord[];
@@ -10,49 +11,118 @@ interface RegistrosDiariosProps {
 const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegistros }) => {
   const hoy = new Date().toISOString().split('T')[0];
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
+  const [doctores, setDoctores] = useState<string[]>([]);
+  const [asistentes, setAsistentes] = useState<string[]>([]);
+  const [servicios, setServicios] = useState<{ nombre: string; precio: number }[]>([]);
+  const [metodosPago, setMetodosPago] = useState<string[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+
   const [formData, setFormData] = useState({
-    nombreDoctor: DOCTORES[0],
-    nombreAsistente: ASISTENTES[0],
+    nombreDoctor: '',
+    nombreAsistente: '',
     nombrePaciente: '',
-    servicio: SERVICIOS[0].nombre, 
+    servicio: '',
     sesionesParaCompletar: 1,
     sesionesCompletadas: 1,
     abono: 0,
     descuento: 0,
     esPacientePropio: true,
     fecha: hoy,
-    metodoPago: METODOS_PAGO[0],
+    metodoPago: '',
   });
 
   useEffect(() => {
-    const registrosGuardados = localStorage.getItem('registrosDentales');
-    if (registrosGuardados) {
-      setRegistros(JSON.parse(registrosGuardados));
-    }
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [doctors, assistants, services, paymentMethods, records] = await Promise.all([
+          fetchDoctors(),
+          fetchAssistants(),
+          fetchServices(),
+          fetchPaymentMethods(),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          }),
+        ]);
+
+        setDoctores(doctors);
+        setAsistentes(assistants);
+        setServicios(services);
+        setMetodosPago(paymentMethods);
+        setRegistros(records.data);
+
+        // Set default values for formData
+        setFormData((prev) => ({
+          ...prev,
+          nombreDoctor: doctors[0] || '',
+          nombreAsistente: assistants[0] || '',
+          servicio: services[0]?.nombre || '',
+          metodoPago: paymentMethods[0] || '',
+        }));
+      } catch {
+        setError('Error al cargar los datos. Por favor, intenta de nuevo.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [setRegistros]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const total = formData.abono - formData.descuento;
-    const nuevoRegistro: DentalRecord = {
-      id: Date.now().toString(),
-      ...formData,
-      total,
-      fecha: fechaSeleccionada,
-    };
-    const registrosActualizados = [...registros, nuevoRegistro];
-    setRegistros(registrosActualizados);
-    localStorage.setItem('registrosDentales', JSON.stringify(registrosActualizados));
-    setFormData({
-      ...formData,
-      nombrePaciente: '',
-      abono: 0,
-      descuento: 0,
-      sesionesCompletadas: 1,
-    });
+    try {
+      const total = formData.abono - formData.descuento;
+      const newRecord = {
+        nombreDoctor: formData.nombreDoctor,
+        nombreAsistente: formData.nombreAsistente,
+        nombrePaciente: formData.nombrePaciente,
+        servicio: formData.servicio,
+        sesionesParaCompletar: formData.sesionesParaCompletar,
+        sesionesCompletadas: formData.sesionesCompletadas,
+        abono: formData.abono,
+        descuento: formData.descuento,
+        total,
+        esPacientePropio: formData.esPacientePropio,
+        fecha: fechaSeleccionada,
+        metodoPago: formData.metodoPago,
+      };
+
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/records`,
+        newRecord,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      setRegistros([...registros, response.data]);
+      setFormData({
+        ...formData,
+        nombrePaciente: '',
+        abono: 0,
+        descuento: 0,
+        sesionesCompletadas: 1,
+      });
+    } catch{
+      setError('Error al guardar el registro. Por favor, intenta de nuevo.');
+    }
   };
 
   const registrosFiltrados = registros.filter((registro) => registro.fecha === fechaSeleccionada);
+
+  if (loading) {
+    return <div className="text-center py-6">Cargando datos...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-6 text-red-500">{error}</div>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -78,7 +148,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               onChange={(e) => setFormData({ ...formData, nombreDoctor: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {DOCTORES.map((doctor) => (
+              {doctores.map((doctor) => (
                 <option key={doctor} value={doctor}>
                   {doctor}
                 </option>
@@ -93,7 +163,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               onChange={(e) => setFormData({ ...formData, nombreAsistente: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {ASISTENTES.map((asistente) => (
+              {asistentes.map((asistente) => (
                 <option key={asistente} value={asistente}>
                   {asistente}
                 </option>
@@ -119,7 +189,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               onChange={(e) => setFormData({ ...formData, servicio: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {SERVICIOS.map((servicio) => (
+              {servicios.map((servicio) => (
                 <option key={servicio.nombre} value={servicio.nombre}>
                   {servicio.nombre} ({formatCOP(servicio.precio)})
                 </option>
@@ -188,7 +258,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               onChange={(e) => setFormData({ ...formData, metodoPago: e.target.value })}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {METODOS_PAGO.map((metodo) => (
+              {metodosPago.map((metodo) => (
                 <option key={metodo} value={metodo}>
                   {metodo}
                 </option>

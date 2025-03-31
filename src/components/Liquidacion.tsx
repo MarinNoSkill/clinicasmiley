@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { DentalRecord } from '../types';
-import { DOCTORES, SERVICIOS, formatCOP } from '../data/constants';
+import { fetchDoctors, fetchServices, formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
 
 interface LiquidacionProps {
@@ -11,26 +13,57 @@ interface LiquidacionProps {
 interface LiquidacionHistorial {
   id: string;
   doctor: string;
-  fechaInicio: string;
-  fechaFin: string;
+  fecha_inicio: string;
+  fecha_fin: string;
   servicios: DentalRecord[][];
-  totalLiquidado: number;
-  fechaLiquidacion: string;
+  total_liquidado: number;
+  fecha_liquidacion: string;
 }
 
 const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) => {
-  const [doctorSeleccionado, setDoctorSeleccionado] = useState<string>(DOCTORES[0]);
+  const [doctores, setDoctores] = useState<string[]>([]);
+  const [servicios, setServicios] = useState<{ nombre: string; precio: number }[]>([]);
+  const [doctorSeleccionado, setDoctorSeleccionado] = useState<string>('');
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
   const [fechaFin, setFechaFin] = useState(new Date().toISOString().split('T')[0]);
-  const [pacienteFiltro, setPacienteFiltro] = useState<string>(''); // Filtro por paciente
-  const [servicioFiltro, setServicioFiltro] = useState<string>(''); // Filtro por servicio
+  const [pacienteFiltro, setPacienteFiltro] = useState<string>('');
+  const [servicioFiltro, setServicioFiltro] = useState<string>('');
   const [mostrarLiquidacion, setMostrarLiquidacion] = useState(false);
   const [serviciosLiquidados, setServiciosLiquidados] = useState<DentalRecord[][]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
 
-  // Obtener lista única de pacientes para el filtro
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [doctors, services, records] = await Promise.all([
+          fetchDoctors(),
+          fetchServices(),
+          axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          }),
+        ]);
+
+        setDoctores(doctors);
+        setServicios(services);
+        setDoctorSeleccionado(doctors[0] || '');
+        setRegistros(records.data);
+      } catch{
+        setError('Error al cargar los datos. Por favor, intenta de nuevo.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [setRegistros]);
+
   const pacientesUnicos = [...new Set(registros.map((registro) => registro.nombrePaciente))].sort();
+  const serviciosUnicos = [...new Set(registros.map((registro) => registro.servicio))].sort();
 
-  // Filtrar registros por doctor, fechas, paciente y servicio
   const registrosFiltrados = registros.filter((registro) => {
     const coincideDoctor = registro.nombreDoctor === doctorSeleccionado;
     const coincideFecha = registro.fecha >= fechaInicio && registro.fecha <= fechaFin;
@@ -39,7 +72,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     return coincideDoctor && coincideFecha && coincidePaciente && coincideServicio;
   });
 
-  // Agrupar registros por paciente y servicio
   const registrosAgrupados: { [key: string]: DentalRecord[] } = registrosFiltrados.reduce(
     (acc, registro) => {
       const key = `${registro.nombrePaciente}-${registro.servicio}`;
@@ -52,7 +84,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     {} as { [key: string]: DentalRecord[] }
   );
 
-  // Separar servicios completados y pendientes
   const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) => {
     const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar;
     const totalSesionesCompletadas = grupo.reduce(
@@ -71,7 +102,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     return totalSesionesCompletadas < totalSesionesParaCompletar;
   });
 
-  // Calcular la liquidación para servicios completados
   const calcularLiquidacion = (servicios: DentalRecord[][]) => {
     return servicios.reduce((total, grupo) => {
       const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
@@ -82,44 +112,59 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
   const totalLiquidacion = calcularLiquidacion(serviciosCompletados);
 
-  // Función para liquidar
-  const handleLiquidar = () => {
-    setMostrarLiquidacion(true);
-    setServiciosLiquidados(serviciosCompletados);
+  const handleLiquidar = async () => {
+    try {
+      setMostrarLiquidacion(true);
+      setServiciosLiquidados(serviciosCompletados);
 
-    // Guardar en el historial de liquidaciones
-    const nuevaLiquidacion: LiquidacionHistorial = {
-      id: Date.now().toString(),
-      doctor: doctorSeleccionado,
-      fechaInicio,
-      fechaFin,
-      servicios: serviciosCompletados,
-      totalLiquidado: totalLiquidacion,
-      fechaLiquidacion: new Date().toISOString().split('T')[0],
-    };
-    const historial = JSON.parse(localStorage.getItem('historialLiquidaciones') || '[]');
-    historial.push(nuevaLiquidacion);
-    localStorage.setItem('historialLiquidaciones', JSON.stringify(historial));
+      const nuevaLiquidacion: LiquidacionHistorial = {
+        id: Date.now().toString(),
+        doctor: doctorSeleccionado,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        servicios: serviciosCompletados,
+        total_liquidado: totalLiquidacion,
+        fecha_liquidacion: new Date().toISOString().split('T')[0],
+      };
 
-    // Eliminar servicios liquidados de los registros
-    const idsServiciosLiquidados = new Set(
-      serviciosCompletados.flatMap((grupo) => grupo.map((registro) => registro.id))
-    );
-    const registrosRestantes = registros.filter((registro) => !idsServiciosLiquidados.has(registro.id));
-    setRegistros(registrosRestantes);
-    localStorage.setItem('registrosDentales', JSON.stringify(registrosRestantes));
+      // Save liquidation to the backend
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/liquidations`,
+        nuevaLiquidacion,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      // Delete liquidated records
+      const idsServiciosLiquidados = serviciosCompletados
+        .flatMap((grupo) => grupo.map((registro) => registro.id));
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        data: { ids: idsServiciosLiquidados },
+      });
+
+      // Update local state
+      const registrosRestantes = registros.filter(
+        (registro) => !idsServiciosLiquidados.includes(registro.id)
+      );
+      setRegistros(registrosRestantes);
+    } catch  {
+      setError('Error al liquidar los servicios. Por favor, intenta de nuevo.');
+    }
   };
 
-  // Función para reiniciar la liquidación
   const handleReiniciar = () => {
     setMostrarLiquidacion(false);
     setServiciosLiquidados([]);
   };
 
-  // Función para descargar en Excel
   const handleDescargarExcel = () => {
     const datosExcel = serviciosLiquidados.length > 0 ? serviciosLiquidados : serviciosCompletados;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const datos = datosExcel.flatMap((grupo, index) => {
       const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
       const totalSesionesCompletadas = grupo.reduce(
@@ -148,6 +193,14 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     XLSX.writeFile(workbook, `Liquidacion_${doctorSeleccionado}_${fechaInicio}_a_${fechaFin}.xlsx`);
   };
 
+  if (loading) {
+    return <div className="text-center py-6">Cargando datos...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-6 text-red-500">{error}</div>;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Liquidación - Clínica Smiley</h2>
@@ -162,7 +215,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
               onChange={(e) => setDoctorSeleccionado(e.target.value)}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {DOCTORES.map((doctor) => (
+              {doctores.map((doctor) => (
                 <option key={doctor} value={doctor}>
                   {doctor}
                 </option>
@@ -214,9 +267,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
               <option value="">Todos los Servicios</option>
-              {SERVICIOS.map((servicio) => (
-                <option key={servicio.nombre} value={servicio.nombre}>
-                  {servicio.nombre}
+              {serviciosUnicos.map((servicio) => (
+                <option key={servicio} value={servicio}>
+                  {servicio}
                 </option>
               ))}
             </select>
@@ -419,7 +472,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {porcentaje}%
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold text-green-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
                         {formatCOP(totalALiquidar)}
                       </td>
                     </tr>
