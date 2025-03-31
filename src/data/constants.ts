@@ -9,9 +9,10 @@ export const formatCOP = (amount: number) => {
   }).format(amount);
 };
 
-export const fetchDoctors = async (): Promise<string[]> => {
+export const fetchDoctors = async (id_sede: string): Promise<string[]> => {
   const token = localStorage.getItem('token');
   const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/doctors`, {
+    params: { id_sede }, // Incluir id_sede como parámetro de consulta
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -19,9 +20,10 @@ export const fetchDoctors = async (): Promise<string[]> => {
   return response.data;
 };
 
-export const fetchAssistants = async (): Promise<string[]> => {
+export const fetchAssistants = async (id_sede: string): Promise<string[]> => {
   const token = localStorage.getItem('token');
   const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/assistants`, {
+    params: { id_sede }, // Incluir id_sede como parámetro de consulta
     headers: {
       Authorization: `Bearer ${token}`,
     },

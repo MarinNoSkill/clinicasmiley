@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom'; // Importar useNavigate
 import { formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
 
@@ -27,6 +28,7 @@ interface LiquidacionHistorial {
   servicios: DentalRecord[][];
   total_liquidado: number;
   fecha_liquidacion: string;
+  id_sede?: number; // Agregar id_sede si está presente en la tabla
 }
 
 const HistorialLiquidaciones: React.FC = () => {
@@ -34,25 +36,48 @@ const HistorialLiquidaciones: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
+  const navigate = useNavigate(); // Agregar useNavigate
+  const id_sede = localStorage.getItem('selectedSede'); // Obtener id_sede
+
   useEffect(() => {
+    // Redirigir a /sedes si no hay id_sede
+    if (!id_sede) {
+      console.log('No se encontró id_sede, redirigiendo a /sedes');
+      navigate('/sedes');
+      return;
+    }
+
     const loadHistorial = async () => {
       try {
         setLoading(true);
+        console.log('Haciendo solicitud a /api/liquidations con id_sede:', id_sede);
         const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
+          params: { id_sede }, // Incluir id_sede en la solicitud
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
+            'Cache-Control': 'no-cache', // Evitar caché en el cliente
           },
         });
+        console.log('Liquidaciones obtenidas:', response.data);
         setHistorial(response.data);
-      } catch {
-        setError('Error al cargar el historial de liquidaciones. Por favor, intenta de nuevo.');
+      } catch (err: any) {
+        console.error('Error al cargar el historial de liquidaciones:', err);
+        if (err.response?.status === 401) {
+          setError('Sesión expirada. Por favor, inicia sesión nuevamente.');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('selectedSede');
+          navigate('/login');
+        } else {
+          setError('Error al cargar el historial de liquidaciones. Por favor, intenta de nuevo.');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     loadHistorial();
-  }, []);
+  }, [id_sede, navigate]); // Agregar dependencias
 
   const handleDescargarExcel = (liquidacion: LiquidacionHistorial) => {
     const datos = liquidacion.servicios.flatMap((grupo) => {
@@ -206,4 +231,4 @@ const HistorialLiquidaciones: React.FC = () => {
   );
 };
 
-export default HistorialLiquidaciones;
+export default HistorialLiquidaciones;  
