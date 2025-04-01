@@ -15,6 +15,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   const [sedeActual, setSedeActual] = useState<string>('Cargando...');
+  const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario); // Verificamos si el usuario es Dueño o Admin
 
   // Obtener el nombre de la sede actual desde el backend
   useEffect(() => {
@@ -83,36 +84,40 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
             >
               Registros Diarios
             </NavLink>
-            <NavLink
-              to="/liquidacion"
-              className={({ isActive }) =>
-                `inline-flex items-center px-1 pt-1 text-sm font-medium ${
-                  isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
-                }`
-              }
-            >
-              Liquidación
-            </NavLink>
-            <NavLink
-              to="/estandarizacion"
-              className={({ isActive }) =>
-                `inline-flex items-center px-1 pt-1 text-sm font-medium ${
-                  isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
-                }`
-              }
-            >
-              Estandarización de Servicios
-            </NavLink>
-            <NavLink
-              to="/historial"
-              className={({ isActive }) =>
-                `inline-flex items-center px-1 pt-1 text-sm font-medium ${
-                  isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
-                }`
-              }
-            >
-              Historial de Liquidaciones
-            </NavLink>
+            {isAdminOrOwner && (
+              <>
+                <NavLink
+                  to="/liquidacion"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 text-sm font-medium ${
+                      isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Liquidación
+                </NavLink>
+                <NavLink
+                  to="/estandarizacion"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 text-sm font-medium ${
+                      isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Estandarización de Servicios
+                </NavLink>
+                <NavLink
+                  to="/historial"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 text-sm font-medium ${
+                      isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Historial de Liquidaciones
+                </NavLink>
+              </>
+            )}
             {/* Mostrar la sede actual y opción para cambiarla */}
             <div className="flex items-center space-x-2">
               <span className="text-sm font-medium text-gray-700">

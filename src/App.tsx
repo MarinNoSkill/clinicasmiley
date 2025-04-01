@@ -1,4 +1,3 @@
-// frontend/src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
@@ -11,12 +10,19 @@ import Login from './components/Login';
 import Sedes from './components/Sedes';
 import { DentalRecord } from './types';
 
-const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: JSX.Element; adminOnly?: boolean }> = ({ children, adminOnly = false }) => {
   const token = localStorage.getItem('token');
   const selectedSede = localStorage.getItem('selectedSede');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   if (!token) return <Navigate to="/login" />;
   if (!selectedSede) return <Navigate to="/sedes" />;
+  
+  // Si la ruta es solo para Dueño/Admin, verificamos el nombre del usuario
+  if (adminOnly && user && !['Dueño', 'Admin'].includes(user.usuario)) {
+    return <Navigate to="/" />;
+  }
+
   return children;
 };
 
@@ -69,7 +75,7 @@ function App() {
           <Route
             path="/liquidacion"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly={true}>
                 <>
                   <Navbar onLogout={handleLogout} />
                   <Liquidacion registros={registros} setRegistros={setRegistros} />
@@ -80,7 +86,7 @@ function App() {
           <Route
             path="/estandarizacion"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly={true}>
                 <>
                   <Navbar onLogout={handleLogout} />
                   <EstandarizacionServicios />
@@ -91,7 +97,7 @@ function App() {
           <Route
             path="/historial"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute adminOnly={true}>
                 <>
                   <Navbar onLogout={handleLogout} />
                   <HistorialLiquidaciones />

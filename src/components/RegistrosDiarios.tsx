@@ -31,6 +31,10 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [metodoPagoAbono, setMetodoPagoAbono] = useState<string>('');
   const [idCuenta, setIdCuenta] = useState<number | null>(null);
   const [idCuentaAbono, setIdCuentaAbono] = useState<number | null>(null);
+  const [montoPrestado, setMontoPrestado] = useState<string>(''); // Para Crédito
+  const [titularCredito, setTitularCredito] = useState<string>(''); // Para Crédito
+  const [esDatáfono, setEsDatáfono] = useState<boolean>(false); // Estado explícito para Datáfono (pago principal)
+  const [esDatáfonoAbono, setEsDatáfonoAbono] = useState<boolean>(false); // Estado explícito para Datáfono (abono)
 
   const [formData, setFormData] = useState({
     nombreDoctor: '',
@@ -45,8 +49,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
   const navigate = useNavigate();
   const id_sede = localStorage.getItem('selectedSede');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario);
 
-  // Cargar datos iniciales
   useEffect(() => {
     if (!id_sede) {
       navigate('/sedes');
@@ -63,9 +68,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           fetchPaymentMethods(),
           axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
             params: { id_sede },
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           }),
           fetchAccounts(id_sede),
         ]);
@@ -86,32 +89,33 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     loadData();
   }, [setRegistros, id_sede, navigate]);
 
-  // Limpiar selección de doctor/asistente cuando cambie el estado de "Es auxiliar"
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      nombreDoctor: '',
-    }));
+    setFormData((prev) => ({ ...prev, nombreDoctor: '' }));
   }, [esAuxiliar]);
 
-  // Limpiar el valor pagado y la cuenta si no hay método de pago seleccionado
   useEffect(() => {
     if (!formData.metodoPago) {
       setValorPagado('');
       setIdCuenta(null);
+      setMontoPrestado('');
+      setTitularCredito('');
+      setEsDatáfono(false);
+    } else {
+      setEsDatáfono(formData.metodoPago.trim().toLowerCase() === 'datáfono');
     }
   }, [formData.metodoPago]);
 
-  // Limpiar el método de pago del abono y la cuenta si no se aplica abono
   useEffect(() => {
-    if (!aplicarAbono) {
+    if (!aplicarAbono || !metodoPagoAbono) {
       setMetodoPagoAbono('');
       setAbonoInput('0');
       setIdCuentaAbono(null);
+      setEsDatáfonoAbono(false);
+    } else {
+      setEsDatáfonoAbono(metodoPagoAbono.trim().toLowerCase() === 'datáfono');
     }
-  }, [aplicarAbono]);
+  }, [aplicarAbono, metodoPagoAbono]);
 
-  // Limpiar el descuento si no se aplica descuento
   useEffect(() => {
     if (!aplicarDescuento) {
       setDescuentoInput('0');
@@ -141,47 +145,61 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     setMetodoPagoAbono('');
     setIdCuenta(null);
     setIdCuentaAbono(null);
+    setMontoPrestado('');
+    setTitularCredito('');
+    setEsDatáfono(false);
+    setEsDatáfonoAbono(false);
   };
 
-  // Calcular el descuento en COP y el nuevo valor total
   const calcularDescuentoYValorTotal = () => {
     let descuentoFinal: number = 0;
     let nuevoValorTotal: number = 0;
+    let abonoAjustado: number = 0;
     const servicioSeleccionado = servicios.find((s) => s.nombre === formData.servicio);
 
-    if (servicioSeleccionado && aplicarDescuento) {
-      const descuentoValue = parseFloat(descuentoInput) || 0;
-      if (esPorcentaje) {
-        descuentoFinal = (servicioSeleccionado.precio * descuentoValue) / 100;
-      } else {
-        descuentoFinal = descuentoValue;
-      }
-      nuevoValorTotal = servicioSeleccionado.precio - descuentoFinal;
-    } else if (servicioSeleccionado) {
+    if (servicioSeleccionado) {
       nuevoValorTotal = servicioSeleccionado.precio;
+
+      if (aplicarDescuento) {
+        const descuentoValue = parseFloat(descuentoInput) || 0;
+        if (esPorcentaje) {
+          descuentoFinal = (nuevoValorTotal * descuentoValue) / 100;
+        } else {
+          descuentoFinal = descuentoValue;
+        }
+        nuevoValorTotal -= descuentoFinal;
+      }
+
+      if (aplicarAbono) {
+        abonoAjustado = parseFloat(abonoInput) || 0;
+        if (esDatáfonoAbono) {
+          abonoAjustado *= 1.05;
+        }
+      }
+
+      if (esDatáfono) {
+        nuevoValorTotal *= 1.05;
+      }
     }
 
-    return { descuentoFinal, nuevoValorTotal };
+    return { descuentoFinal, nuevoValorTotal, abonoAjustado };
   };
 
-  const { descuentoFinal, nuevoValorTotal } = calcularDescuentoYValorTotal();
+  const { descuentoFinal, nuevoValorTotal, abonoAjustado } = calcularDescuentoYValorTotal();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Validar el valor pagado si hay un método de pago seleccionado
       if (formData.metodoPago && !valorPagado) {
         setError('Por favor, ingresa el valor pagado.');
         return;
       }
 
-      // Validar el método de pago para el abono si se aplica abono
       if (aplicarAbono && !metodoPagoAbono) {
         setError('Por favor, selecciona un método de pago para el abono.');
         return;
       }
 
-      // Validar la cuenta si el método de pago (para valor pagado o abono) es "Transferencia"
       if (formData.metodoPago === 'Transferencia' && !idCuenta) {
         setError('Por favor, selecciona una cuenta para la transferencia (valor pagado).');
         return;
@@ -191,12 +209,23 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         return;
       }
 
+      if (formData.metodoPago === 'Crédito') {
+        if (!montoPrestado || parseFloat(montoPrestado) <= 0) {
+          setError('Por favor, ingresa un monto prestado válido para Crédito.');
+          return;
+        }
+        if (!titularCredito) {
+          setError('Por favor, ingresa el nombre del titular del crédito para Crédito.');
+          return;
+        }
+      }
+
       const newRecord = {
         nombreDoctor: formData.nombreDoctor,
         nombrePaciente: formData.nombrePaciente,
         docId: formData.docId,
         servicio: formData.servicio,
-        abono: aplicarAbono ? parseFloat(abonoInput) : null,
+        abono: aplicarAbono ? abonoAjustado : null,
         metodoPagoAbono: aplicarAbono ? metodoPagoAbono : null,
         id_cuenta_abono: aplicarAbono && metodoPagoAbono === 'Transferencia' ? idCuentaAbono : null,
         descuento: aplicarDescuento ? descuentoFinal : null,
@@ -207,15 +236,18 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         esAuxiliar: esAuxiliar,
         id_sede: parseInt(id_sede, 10),
         valorPagado: formData.metodoPago ? parseFloat(valorPagado) : null,
+        montoPrestado: formData.metodoPago === 'Crédito' ? parseFloat(montoPrestado) : null,
+        titularCredito: formData.metodoPago === 'Crédito' ? titularCredito : null,
+        esDatáfono: esDatáfono,
+        esDatáfonoAbono: aplicarAbono ? esDatáfonoAbono : null,
+        valor_total: nuevoValorTotal,
       };
 
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/records`,
         newRecord,
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         }
       );
 
@@ -234,9 +266,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
     try {
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         data: { ids: selectedRecords, id_sede: parseInt(id_sede, 10) },
       });
 
@@ -248,22 +278,15 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   };
 
   const handleSelectRecord = (id: string) => {
-    if (selectedRecords.includes(id)) {
-      setSelectedRecords(selectedRecords.filter((recordId) => recordId !== id));
-    } else {
-      setSelectedRecords([...selectedRecords, id]);
-    }
+    setSelectedRecords((prev) =>
+      prev.includes(id) ? prev.filter((recordId) => recordId !== id) : [...prev, id]
+    );
   };
 
   const registrosFiltrados = registros.filter((registro) => registro.fecha === fechaSeleccionada);
 
-  if (loading) {
-    return <div className="text-center py-6">Cargando datos...</div>;
-  }
-
-  if (error) {
-    return <div className="text-center py-6 text-red-500">{error}</div>;
-  }
+  if (loading) return <div className="text-center py-6">Cargando datos...</div>;
+  if (error) return <div className="text-center py-6 text-red-500">{error}</div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -283,9 +306,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              ¿Es auxiliar?
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">¿Es auxiliar?</label>
             <input
               type="checkbox"
               checked={esAuxiliar}
@@ -356,9 +377,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              ¿Aplicar Abono?
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">¿Aplicar Abono?</label>
             <input
               type="checkbox"
               checked={aplicarAbono}
@@ -386,15 +405,22 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   <>
                     <div className="mt-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Abono (COP)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1000"
-                        value={abonoInput}
-                        onChange={(e) => setAbonoInput(e.target.value)}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        required
-                      />
+                      <div className="flex items-center space-x-4">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1000"
+                          value={abonoInput}
+                          onChange={(e) => setAbonoInput(e.target.value)}
+                          className="w-full rounded-md patient's border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          required
+                        />
+                        {esDatáfonoAbono && (
+                          <span className="text-sm text-gray-600">
+                            Abono Ajustado: {formatCOP(abonoAjustado)}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {metodoPagoAbono === 'Transferencia' && (
@@ -422,9 +448,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              ¿Aplicar Descuento?
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">¿Aplicar Descuento?</label>
             <input
               type="checkbox"
               checked={aplicarDescuento}
@@ -433,9 +457,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
             />
             {aplicarDescuento && (
               <div className="mt-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ¿Es porcentaje?
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">¿Es porcentaje?</label>
                 <input
                   type="checkbox"
                   checked={esPorcentaje}
@@ -485,15 +507,22 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               <>
                 <div className="mt-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pagado (COP)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1000"
-                    value={valorPagado}
-                    onChange={(e) => setValorPagado(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
+                  <div className="flex items-center space-x-4">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={valorPagado}
+                      onChange={(e) => setValorPagado(e.target.value)}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      required
+                    />
+                    {formData.servicio && (
+                      <span className="text-sm text-gray-600">
+                        Nuevo Valor del Servicio: {formatCOP(nuevoValorTotal)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {formData.metodoPago === 'Transferencia' && (
                   <div className="mt-2">
@@ -513,15 +542,39 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     </select>
                   </div>
                 )}
+                {formData.metodoPago === 'Crédito' && (
+                  <>
+                    <div className="mt-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Monto Prestado (COP)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1000"
+                        value={montoPrestado}
+                        onChange={(e) => setMontoPrestado(e.target.value)}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Titular del Crédito</label>
+                      <input
+                        type="text"
+                        value={titularCredito}
+                        onChange={(e) => setTitularCredito(e.target.value)}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
 
           {!esAuxiliar && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ¿Paciente Propio?
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">¿Paciente Propio?</label>
               <input
                 type="checkbox"
                 checked={esPacientePropio}
@@ -544,13 +597,15 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
       <div className="bg-white shadow-md rounded-lg">
         <div className="p-4">
-          <button
-            onClick={handleDelete}
-            className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-red-300"
-            disabled={selectedRecords.length === 0}
-          >
-            Eliminar Seleccionados ({selectedRecords.length})
-          </button>
+          {isAdminOrOwner && (
+            <button
+              onClick={handleDelete}
+              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-red-300"
+              disabled={selectedRecords.length === 0}
+            >
+              Eliminar Seleccionados ({selectedRecords.length})
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -560,12 +615,12 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   Seleccionar
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                  Doctor/a
+                  Doctor/Auxiliar
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                   Paciente
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Documento
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
@@ -575,7 +630,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   Abono
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                  Método Pago (Abono)
+                  Método de Pago Abono
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Descuento
@@ -583,15 +638,24 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                   Método de Pago
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Valor Total
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                  Valor Restante
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                  Fecha Inicio
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                  Fecha Final
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {registrosFiltrados.map((registro) => (
                 <tr key={registro.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={selectedRecords.includes(registro.id)}
@@ -608,21 +672,32 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {registro.docId}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.abono !== null ? formatCOP(registro.abono) : 'N/A'}
+                    {registro.servicio}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.metodoPagoAbono || 'N/A'}
+                    {formatCOP(registro.abono)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.descuento !== null ? formatCOP(registro.descuento) : 'N/A'}
+                    {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.metodoPago || 'N/A'}
+                    {formatCOP(registro.descuento)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCOP(registro.valor_total)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatCOP(registro.valor_liquidado)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {registro.fecha}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {registro.fechaFinal || 'Pendiente'}
                   </td>
                 </tr>
               ))}

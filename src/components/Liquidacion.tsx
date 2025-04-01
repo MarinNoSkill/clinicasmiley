@@ -67,12 +67,10 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     loadData();
   }, [setRegistros, id_sede, navigate]);
 
-  // Limpiar selección de doctor/asistente cuando cambie el estado de "Es auxiliar"
   useEffect(() => {
     setDoctorSeleccionado('');
   }, [esAuxiliar]);
 
-  // Filtrar registros según los criterios seleccionados
   const pacientesUnicos = [...new Set(registros.map((registro) => registro.nombrePaciente))].sort();
   const serviciosUnicos = [...new Set(registros.map((registro) => registro.servicio))].sort();
 
@@ -84,7 +82,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     return coincideDoctor && coincideFecha && coincidePaciente && coincideServicio;
   });
 
-  // Agrupar registros por paciente y servicio
   const registrosAgrupados: { [key: string]: DentalRecord[] } = registrosFiltrados.reduce(
     (acc, registro) => {
       const key = `${registro.nombrePaciente}-${registro.servicio}`;
@@ -97,20 +94,14 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     {} as { [key: string]: DentalRecord[] }
   );
 
-  // Determinar servicios listos y pendientes
-  const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) => {
-    const todosListos = grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0);
-    console.log(`Grupo ${grupo[0].nombrePaciente} - ${grupo[0].servicio}: ¿Listo? ${todosListos}`, grupo);
-    return todosListos;
-  });
+  const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) =>
+    grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
+  );
 
-  const serviciosPendientes = Object.values(registrosAgrupados).filter((grupo) => {
-    const noListo = !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0);
-    console.log(`Grupo ${grupo[0].nombrePaciente} - ${grupo[0].servicio}: ¿Pendiente? ${noListo}`, grupo);
-    return noListo;
-  });
+  const serviciosPendientes = Object.values(registrosAgrupados).filter(
+    (grupo) => !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
+  );
 
-  // Calcular el total a liquidar para un grupo específico
   const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
     const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
     const idPorc = grupo[0].idPorc;
@@ -129,14 +120,12 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       return valorLiquidado;
     } catch (error) {
       console.error('Error al obtener el porcentaje:', error);
-      // Fallback temporal: usar porcentaje según idPorc
       const porcentaje = idPorc === 2 ? 0.5 : 0.4;
       const valorLiquidado = totalGrupo * porcentaje;
       return valorLiquidado;
     }
   };
 
-  // Calcular el total a liquidar para todos los servicios completados
   const [totalLiquidacion, setTotalLiquidacion] = useState<number>(0);
 
   useEffect(() => {
@@ -150,9 +139,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     };
 
     fetchTotalLiquidacion();
-  }, [serviciosCompletados]); // Dependencia en serviciosCompletados, que ya incluye los filtros
+  }, [serviciosCompletados]);
 
-  // Función para liquidar un grupo específico
   const handleLiquidarGrupo = async (grupo: DentalRecord[]) => {
     try {
       const totalGrupo = await calcularTotalGrupo(grupo);
@@ -165,7 +153,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         fechaLiquidacion: new Date().toISOString().split('T')[0],
       };
 
-      // Guardar liquidación en el backend
       await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
         nuevaLiquidacion,
@@ -176,7 +163,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
-      // Eliminar registros liquidados
       const idsServiciosLiquidados = grupo.map((registro) => registro.id);
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
         headers: {
@@ -185,7 +171,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) },
       });
 
-      // Actualizar estado local
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
@@ -197,7 +182,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     }
   };
 
-  // Función para liquidar todos los servicios completados
   const handleLiquidarTodos = async () => {
     try {
       setMostrarLiquidacion(true);
@@ -212,7 +196,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         fechaLiquidacion: new Date().toISOString().split('T')[0],
       };
 
-      // Guardar liquidación en el backend
       await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
         nuevaLiquidacion,
@@ -223,7 +206,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
-      // Eliminar registros liquidados
       const idsServiciosLiquidados = serviciosCompletados.flatMap((grupo) =>
         grupo.map((registro) => registro.id)
       );
@@ -234,7 +216,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) },
       });
 
-      // Actualizar estado local
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
@@ -252,7 +233,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
   const handleDescargarExcel = () => {
     const datosExcel = serviciosLiquidados.length > 0 ? serviciosLiquidados : serviciosCompletados;
-    const datos = datosExcel.flatMap((grupo, index) => {
+    const datos = datosExcel.flatMap((grupo) => {
       const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
       const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
         ? grupo[0].sesiones
@@ -264,16 +245,25 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
       ].join(', ');
 
-      return {
-        Paciente: grupo[0].nombrePaciente,
-        Servicio: grupo[0].servicio,
+      return grupo.map((registro) => ({
+        'Doctor/Auxiliar': registro.nombreDoctor,
+        Paciente: registro.nombrePaciente,
+        Documento: registro.docId,
+        Servicio: registro.servicio,
         'Progreso Sesiones': `${sesionesCompletadas}/${sesionesTotales}`,
+        Abono: registro.abono || 0,
+        'Método de Pago Abono': registro.metodoPagoAbono || 'N/A',
+        Descuento: registro.descuento || 0,
+        'Método de Pago': registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A',
         'Total Pagado': totalGrupo,
-        'Método de Pago': metodosPago,
+        'Valor Total': registro.valor_total,
+        'Valor Restante': registro.valor_liquidado,
         'Tipo de Paciente': grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)',
         Porcentaje: `${porcentaje}%`,
+        'Fecha Inicio': registro.fecha,
+        'Fecha Final': registro.fechaFinal || 'Pendiente',
         'Total a Liquidar': totalALiquidar,
-      };
+      }));
     });
 
     const worksheet = XLSX.utils.json_to_sheet(datos);
@@ -294,7 +284,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Liquidación - Clínica Smiley</h2>
 
-      {/* Filtros */}
       <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
           <div>
@@ -378,7 +367,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           </div>
         </div>
 
-        {/* Resumen en Tarjetas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-blue-100 p-4 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-blue-900">Total a Liquidar</h3>
@@ -394,7 +382,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           </div>
         </div>
 
-        {/* Botones de Acción */}
         <div className="flex space-x-4">
           <button
             onClick={handleLiquidarTodos}
@@ -426,7 +413,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         </div>
       </div>
 
-      {/* Sección de Servicios Liquidados */}
       {mostrarLiquidacion && serviciosLiquidados.length > 0 && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Servicios Liquidados</h3>
@@ -434,71 +420,63 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Servicio
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Progreso Sesiones
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Total Pagado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Método de Pago
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Tipo de Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Porcentaje
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Total a Liquidar
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Doctor/Auxiliar</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Documento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Servicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Progreso Sesiones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Descuento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total Pagado</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Restante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Tipo de Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Porcentaje</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Inicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Final</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total a Liquidar</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {serviciosLiquidados.map((grupo, index) => {
-                  const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
-                  const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+                {serviciosLiquidados.flat().map((registro, index) => {
+                  const grupo = serviciosLiquidados.find((g) =>
+                    g.some((r) => r.id === registro.id)
+                  )!;
+                  const totalGrupo = grupo.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+                  const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
                     ? grupo[0].sesiones
                     : grupo.length;
                   const sesionesTotales = grupo[0].sesiones || 1;
                   const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
                   const totalALiquidar = totalGrupo * (porcentaje / 100);
-                  const metodosPago = [
-                    ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
-                  ].join(', ');
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreDoctor}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombrePaciente}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].nombrePaciente}
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].servicio}
+                        {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sesionesCompletadas}/{sesionesTotales}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCOP(totalGrupo)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {metodosPago}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {porcentaje}%
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
-                        {formatCOP(totalALiquidar)}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fechaFinal || 'Pendiente'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{formatCOP(totalALiquidar)}</td>
                     </tr>
                   );
                 })}
@@ -508,7 +486,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         </div>
       )}
 
-      {/* Sección de Servicios Listos para Liquidar (antes de liquidar) */}
       {!mostrarLiquidacion && serviciosCompletados.length > 0 && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Servicios Listos para Liquidar</h3>
@@ -516,77 +493,67 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Servicio
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Progreso Sesiones
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Total Pagado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Método de Pago
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Tipo de Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Porcentaje
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Total a Liquidar
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Acción
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Doctor/Auxiliar</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Documento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Servicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Progreso Sesiones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Descuento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total Pagado</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Restante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Tipo de Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Porcentaje</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Inicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Final</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total a Liquidar</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Acción</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {serviciosCompletados.map((grupo, index) => {
-                  const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
-                  const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+                {serviciosCompletados.flat().map((registro, index) => {
+                  const grupo = serviciosCompletados.find((g) =>
+                    g.some((r) => r.id === registro.id)
+                  )!;
+                  const totalGrupo = grupo.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+                  const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
                     ? grupo[0].sesiones
                     : grupo.length;
                   const sesionesTotales = grupo[0].sesiones || 1;
                   const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
                   const totalALiquidar = totalGrupo * (porcentaje / 100);
-                  const metodosPago = [
-                    ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
-                  ].join(', ');
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreDoctor}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombrePaciente}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].nombrePaciente}
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].servicio}
+                        {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sesionesCompletadas}/{sesionesTotales}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCOP(totalGrupo)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {metodosPago}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {porcentaje}%
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
-                        {formatCOP(totalALiquidar)}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fechaFinal || 'Pendiente'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{formatCOP(totalALiquidar)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <button
-                          onClick={() => handleLiquidarGrupo(grupo)}
+                          onClick={() => handleLiquidarGrupo([registro])}
                           className="px-4 py-2 rounded-md text-white font-medium bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200"
                         >
                           Liquidar
@@ -601,7 +568,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         </div>
       )}
 
-      {/* Sección de Servicios Pendientes */}
       {serviciosPendientes.length > 0 && (
         <div className="bg-white shadow-lg rounded-lg p-6">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Servicios Pendientes de Completar</h3>
@@ -609,57 +575,60 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Servicio
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Progreso Sesiones
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Total Pagado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Método de Pago
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Tipo de Paciente
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Doctor/Auxiliar</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Documento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Servicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Progreso Sesiones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Descuento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total Pagado</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Restante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Tipo de Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Porcentaje</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Inicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Final</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {serviciosPendientes.map((grupo, index) => {
-                  const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
-                  const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+                {serviciosPendientes.flat().map((registro, index) => {
+                  const grupo = serviciosPendientes.find((g) =>
+                    g.some((r) => r.id === registro.id)
+                  )!;
+                  const totalGrupo = grupo.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+                  const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
                     ? grupo[0].sesiones
                     : grupo.length;
                   const sesionesTotales = grupo[0].sesiones || 1;
-                  const metodosPago = [
-                    ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
-                  ].join(', ');
+                  const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreDoctor}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombrePaciente}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].nombrePaciente}
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].servicio}
+                        {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sesionesCompletadas}/{sesionesTotales}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCOP(totalGrupo)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {metodosPago}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fechaFinal || 'Pendiente'}</td>
                     </tr>
                   );
                 })}
@@ -669,7 +638,6 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         </div>
       )}
 
-      {/* Mensaje si no hay servicios */}
       {registrosFiltrados.length === 0 && (
         <p className="text-gray-600 text-center mt-8">
           No hay registros que coincidan con los filtros seleccionados.
