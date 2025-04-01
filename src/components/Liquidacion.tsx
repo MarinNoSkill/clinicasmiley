@@ -1,29 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DentalRecord } from '../types';
-import { fetchDoctors, fetchServices, formatCOP } from '../data/constants';
+import { fetchDoctors, fetchAssistants, fetchServices, formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
-import { useNavigate } from 'react-router-dom'; // Importar useNavigate
+import { useNavigate } from 'react-router-dom';
 
 interface LiquidacionProps {
   registros: DentalRecord[];
   setRegistros: (registros: DentalRecord[]) => void;
 }
 
-interface LiquidacionHistorial {
-  id: string;
-  doctor: string;
-  fecha_inicio: string;
-  fecha_fin: string;
-  servicios: DentalRecord[][];
-  total_liquidado: number;
-  fecha_liquidacion: string;
-}
-
 const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) => {
   const [doctores, setDoctores] = useState<string[]>([]);
+  const [asistentes, setAsistentes] = useState<string[]>([]);
   const [servicios, setServicios] = useState<{ nombre: string; precio: number }[]>([]);
   const [doctorSeleccionado, setDoctorSeleccionado] = useState<string>('');
+  const [esAuxiliar, setEsAuxiliar] = useState<boolean>(false);
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
   const [fechaFin, setFechaFin] = useState(new Date().toISOString().split('T')[0]);
   const [pacienteFiltro, setPacienteFiltro] = useState<string>('');
@@ -33,8 +25,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  const navigate = useNavigate(); // Agregar useNavigate
-  const id_sede = localStorage.getItem('selectedSede'); // Obtener id_sede
+  const navigate = useNavigate();
+  const id_sede = localStorage.getItem('selectedSede');
 
   useEffect(() => {
     if (!id_sede) {
@@ -47,11 +39,12 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       try {
         setLoading(true);
         console.log('Haciendo solicitud a /api/records con id_sede:', id_sede);
-        const [doctors, services, records] = await Promise.all([
-          fetchDoctors(id_sede), // Pasar id_sede
+        const [doctors, assistants, services, records] = await Promise.all([
+          fetchDoctors(id_sede),
+          fetchAssistants(id_sede),
           fetchServices(),
           axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
-            params: { id_sede }, // Incluir id_sede en la solicitud
+            params: { id_sede },
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,
             },
@@ -59,8 +52,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         ]);
 
         setDoctores(doctors);
+        setAsistentes(assistants);
         setServicios(services);
-        setDoctorSeleccionado(doctors[0] || '');
+        setDoctorSeleccionado(doctors[0] || assistants[0] || '');
         setRegistros(records.data);
       } catch (err) {
         console.error('Error al cargar los datos:', err);
@@ -71,9 +65,14 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     };
 
     loadData();
-  }, [setRegistros, id_sede, navigate]); // Agregar id_sede y navigate a las dependencias
+  }, [setRegistros, id_sede, navigate]);
 
-  // Resto del código sigue igual...
+  // Limpiar selección de doctor/asistente cuando cambie el estado de "Es auxiliar"
+  useEffect(() => {
+    setDoctorSeleccionado('');
+  }, [esAuxiliar]);
+
+  // Filtrar registros según los criterios seleccionados
   const pacientesUnicos = [...new Set(registros.map((registro) => registro.nombrePaciente))].sort();
   const serviciosUnicos = [...new Set(registros.map((registro) => registro.servicio))].sort();
 
@@ -85,6 +84,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     return coincideDoctor && coincideFecha && coincidePaciente && coincideServicio;
   });
 
+  // Agrupar registros por paciente y servicio
   const registrosAgrupados: { [key: string]: DentalRecord[] } = registrosFiltrados.reduce(
     (acc, registro) => {
       const key = `${registro.nombrePaciente}-${registro.servicio}`;
@@ -97,47 +97,72 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     {} as { [key: string]: DentalRecord[] }
   );
 
+  // Determinar servicios listos y pendientes
   const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) => {
-    const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar || 1; // Ajustar si no existe
-    const totalSesionesCompletadas = grupo.reduce(
-      (sum, registro) => sum + (registro.sesionesCompletadas || 1),
-      0
-    );
-    return totalSesionesCompletadas >= totalSesionesParaCompletar;
+    const todosListos = grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0);
+    console.log(`Grupo ${grupo[0].nombrePaciente} - ${grupo[0].servicio}: ¿Listo? ${todosListos}`, grupo);
+    return todosListos;
   });
 
   const serviciosPendientes = Object.values(registrosAgrupados).filter((grupo) => {
-    const totalSesionesParaCompletar = grupo[0].sesionesParaCompletar || 1;
-    const totalSesionesCompletadas = grupo.reduce(
-      (sum, registro) => sum + (registro.sesionesCompletadas || 1),
-      0
-    );
-    return totalSesionesCompletadas < totalSesionesParaCompletar;
+    const noListo = !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0);
+    console.log(`Grupo ${grupo[0].nombrePaciente} - ${grupo[0].servicio}: ¿Pendiente? ${noListo}`, grupo);
+    return noListo;
   });
 
-  const calcularLiquidacion = (servicios: DentalRecord[][]) => {
-    return servicios.reduce((total, grupo) => {
-      const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-      const porcentaje = grupo[0].esPacientePropio ? 0.5 : 0.4;
-      return total + totalGrupo * porcentaje;
-    }, 0);
+  // Calcular el total a liquidar para un grupo específico
+  const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
+    const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
+    const idPorc = grupo[0].idPorc;
+    try {
+      const { data: porcentajeData } = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/porcentajes/${idPorc}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      const porcentaje = porcentajeData.porcentaje / 100;
+      const valorLiquidado = totalGrupo * porcentaje;
+      return valorLiquidado;
+    } catch (error) {
+      console.error('Error al obtener el porcentaje:', error);
+      // Fallback temporal: usar porcentaje según idPorc
+      const porcentaje = idPorc === 2 ? 0.5 : 0.4;
+      const valorLiquidado = totalGrupo * porcentaje;
+      return valorLiquidado;
+    }
   };
 
-  const totalLiquidacion = calcularLiquidacion(serviciosCompletados);
+  // Calcular el total a liquidar para todos los servicios completados
+  const [totalLiquidacion, setTotalLiquidacion] = useState<number>(0);
 
-  const handleLiquidar = async () => {
+  useEffect(() => {
+    const fetchTotalLiquidacion = async () => {
+      let total = 0;
+      for (const grupo of serviciosCompletados) {
+        const valorLiquidado = await calcularTotalGrupo(grupo);
+        total += valorLiquidado;
+      }
+      setTotalLiquidacion(total);
+    };
+
+    fetchTotalLiquidacion();
+  }, [serviciosCompletados]); // Dependencia en serviciosCompletados, que ya incluye los filtros
+
+  // Función para liquidar un grupo específico
+  const handleLiquidarGrupo = async (grupo: DentalRecord[]) => {
     try {
-      setMostrarLiquidacion(true);
-      setServiciosLiquidados(serviciosCompletados);
-
-      const nuevaLiquidacion: LiquidacionHistorial = {
-        id: Date.now().toString(),
+      const totalGrupo = await calcularTotalGrupo(grupo);
+      const nuevaLiquidacion = {
         doctor: doctorSeleccionado,
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-        servicios: serviciosCompletados,
-        total_liquidado: totalLiquidacion,
-        fecha_liquidacion: new Date().toISOString().split('T')[0],
+        fechaInicio: fechaInicio,
+        fechaFin: fechaFin,
+        servicios: [grupo],
+        totalLiquidado: totalGrupo,
+        fechaLiquidacion: new Date().toISOString().split('T')[0],
       };
 
       // Guardar liquidación en el backend
@@ -152,13 +177,61 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       );
 
       // Eliminar registros liquidados
-      const idsServiciosLiquidados = serviciosCompletados
-        .flatMap((grupo) => grupo.map((registro) => registro.id));
+      const idsServiciosLiquidados = grupo.map((registro) => registro.id);
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) }, // Incluir id_sede
+        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) },
+      });
+
+      // Actualizar estado local
+      const registrosRestantes = registros.filter(
+        (registro) => !idsServiciosLiquidados.includes(registro.id)
+      );
+      setRegistros(registrosRestantes);
+      setServiciosLiquidados([...serviciosLiquidados, grupo]);
+    } catch (err) {
+      console.error('Error al liquidar el grupo:', err);
+      setError('Error al liquidar el grupo. Por favor, intenta de nuevo.');
+    }
+  };
+
+  // Función para liquidar todos los servicios completados
+  const handleLiquidarTodos = async () => {
+    try {
+      setMostrarLiquidacion(true);
+      setServiciosLiquidados(serviciosCompletados);
+
+      const nuevaLiquidacion = {
+        doctor: doctorSeleccionado,
+        fechaInicio: fechaInicio,
+        fechaFin: fechaFin,
+        servicios: serviciosCompletados,
+        totalLiquidado: totalLiquidacion,
+        fechaLiquidacion: new Date().toISOString().split('T')[0],
+      };
+
+      // Guardar liquidación en el backend
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/liquidations`,
+        nuevaLiquidacion,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      // Eliminar registros liquidados
+      const idsServiciosLiquidados = serviciosCompletados.flatMap((grupo) =>
+        grupo.map((registro) => registro.id)
+      );
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) },
       });
 
       // Actualizar estado local
@@ -180,19 +253,21 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const handleDescargarExcel = () => {
     const datosExcel = serviciosLiquidados.length > 0 ? serviciosLiquidados : serviciosCompletados;
     const datos = datosExcel.flatMap((grupo, index) => {
-      const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-      const totalSesionesCompletadas = grupo.reduce(
-        (sum, registro) => sum + (registro.sesionesCompletadas || 1),
-        0
-      );
-      const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
+      const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
+      const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+        ? grupo[0].sesiones
+        : grupo.length;
+      const sesionesTotales = grupo[0].sesiones || 1;
+      const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
       const totalALiquidar = totalGrupo * (porcentaje / 100);
-      const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
+      const metodosPago = [
+        ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
+      ].join(', ');
 
       return {
         Paciente: grupo[0].nombrePaciente,
         Servicio: grupo[0].servicio,
-        'Progreso Sesiones': `${totalSesionesCompletadas}/${grupo[0].sesionesParaCompletar || 1}`,
+        'Progreso Sesiones': `${sesionesCompletadas}/${sesionesTotales}`,
         'Total Pagado': totalGrupo,
         'Método de Pago': metodosPago,
         'Tipo de Paciente': grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)',
@@ -221,17 +296,30 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
       {/* Filtros */}
       <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Doctor/a</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">¿Es auxiliar?</label>
+            <input
+              type="checkbox"
+              checked={esAuxiliar}
+              onChange={(e) => setEsAuxiliar(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar {esAuxiliar ? 'Auxiliar' : 'Doctor/a'}
+            </label>
             <select
               value={doctorSeleccionado}
               onChange={(e) => setDoctorSeleccionado(e.target.value)}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
-              {doctores.map((doctor) => (
-                <option key={doctor} value={doctor}>
-                  {doctor}
+              <option value="">Selecciona un {esAuxiliar ? 'auxiliar' : 'doctor'}</option>
+              {(esAuxiliar ? asistentes : doctores).map((profesional) => (
+                <option key={profesional} value={profesional}>
+                  {profesional}
                 </option>
               ))}
             </select>
@@ -309,7 +397,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         {/* Botones de Acción */}
         <div className="flex space-x-4">
           <button
-            onClick={handleLiquidar}
+            onClick={handleLiquidarTodos}
             disabled={serviciosCompletados.length === 0 || mostrarLiquidacion}
             className={`px-6 py-2 rounded-md text-white font-medium ${
               serviciosCompletados.length === 0 || mostrarLiquidacion
@@ -317,7 +405,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                 : 'bg-green-600 hover:bg-green-700'
             } focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200`}
           >
-            Liquidar Servicios
+            Liquidar Todos los Servicios
           </button>
           {mostrarLiquidacion && (
             <button
@@ -374,14 +462,16 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {serviciosLiquidados.map((grupo, index) => {
-                  const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-                  const totalSesionesCompletadas = grupo.reduce(
-                    (sum, registro) => sum + (registro.sesionesCompletadas || 1),
-                    0
-                  );
-                  const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
+                  const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
+                  const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+                    ? grupo[0].sesiones
+                    : grupo.length;
+                  const sesionesTotales = grupo[0].sesiones || 1;
+                  const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
                   const totalALiquidar = totalGrupo * (porcentaje / 100);
-                  const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
+                  const metodosPago = [
+                    ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
+                  ].join(', ');
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
@@ -392,7 +482,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {grupo[0].servicio}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar || 1}
+                        {sesionesCompletadas}/{sesionesTotales}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCOP(totalGrupo)}
@@ -450,18 +540,23 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                     Total a Liquidar
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                    Acción
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {serviciosCompletados.map((grupo, index) => {
-                  const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-                  const totalSesionesCompletadas = grupo.reduce(
-                    (sum, registro) => sum + (registro.sesionesCompletadas || 1),
-                    0
-                  );
-                  const porcentaje = grupo[0].esPacientePropio ? 50 : 40;
+                  const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
+                  const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+                    ? grupo[0].sesiones
+                    : grupo.length;
+                  const sesionesTotales = grupo[0].sesiones || 1;
+                  const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
                   const totalALiquidar = totalGrupo * (porcentaje / 100);
-                  const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
+                  const metodosPago = [
+                    ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
+                  ].join(', ');
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
@@ -472,7 +567,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {grupo[0].servicio}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar || 1}
+                        {sesionesCompletadas}/{sesionesTotales}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCOP(totalGrupo)}
@@ -488,6 +583,14 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
                         {formatCOP(totalALiquidar)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <button
+                          onClick={() => handleLiquidarGrupo(grupo)}
+                          className="px-4 py-2 rounded-md text-white font-medium bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200"
+                        >
+                          Liquidar
+                        </button>
                       </td>
                     </tr>
                   );
@@ -528,12 +631,14 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {serviciosPendientes.map((grupo, index) => {
-                  const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-                  const totalSesionesCompletadas = grupo.reduce(
-                    (sum, registro) => sum + (registro.sesionesCompletadas || 1),
-                    0
-                  );
-                  const metodosPago = [...new Set(grupo.map((registro) => registro.metodoPago))].join(', ');
+                  const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
+                  const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
+                    ? grupo[0].sesiones
+                    : grupo.length;
+                  const sesionesTotales = grupo[0].sesiones || 1;
+                  const metodosPago = [
+                    ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
+                  ].join(', ');
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
@@ -544,7 +649,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {grupo[0].servicio}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {totalSesionesCompletadas}/{grupo[0].sesionesParaCompletar || 1}
+                        {sesionesCompletadas}/{sesionesTotales}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatCOP(totalGrupo)}

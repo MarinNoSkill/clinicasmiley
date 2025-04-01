@@ -1,61 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom'; // Importar useNavigate
+import { useNavigate } from 'react-router-dom';
 import { formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
 
 interface DentalRecord {
-  id: string;
-  nombre_doctor: string;
-  nombre_asistente: string;
-  nombre_paciente: string;
-  servicio: string;
-  sesiones_para_completar: number;
-  sesiones_completadas: number;
+  paciente: string;
+  nombre_doc: string;
+  nombre_serv: string;
+  nombre_aux: string | null;
   abono: number;
-  descuento: number;
-  total: number;
+  id_porc: number;
+  porcentaje: number | null;
+  id_metodo: number | null;
+  metodoPago: string | null;
+  id_metodo_abono: number | null;
+  metodoPagoAbono: string | null;
+  dcto: number;
+  valor_total: number;
   es_paciente_propio: boolean;
-  fecha: string;
-  metodo_pago: string;
+  id_cuenta: number | null;
+  id_cuenta_abono: number | null;
+  valor_pagado: number;
 }
 
 interface LiquidacionHistorial {
   id: string;
   doctor: string;
   fecha_inicio: string;
-  fecha_fin: string;
-  servicios: DentalRecord[][];
+  fecha_final: string;
+  fecha_liquidacion: string; // Agregamos fecha_liquidacion
+  servicios: DentalRecord[];
   total_liquidado: number;
-  fecha_liquidacion: string;
-  id_sede?: number; // Agregar id_sede si está presente en la tabla
 }
 
 const HistorialLiquidaciones: React.FC = () => {
   const [historial, setHistorial] = useState<LiquidacionHistorial[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]); // Para almacenar los IDs de los grupos seleccionados
 
-  const navigate = useNavigate(); // Agregar useNavigate
-  const id_sede = localStorage.getItem('selectedSede'); // Obtener id_sede
+  const navigate = useNavigate();
+  const idSede = localStorage.getItem('selectedSede');
 
   useEffect(() => {
-    // Redirigir a /sedes si no hay id_sede
-    if (!id_sede) {
-      console.log('No se encontró id_sede, redirigiendo a /sedes');
-      navigate('/sedes');
-      return;
-    }
-
     const loadHistorial = async () => {
       try {
+        if (!idSede) {
+          throw new Error('No se ha seleccionado una sede');
+        }
+
         setLoading(true);
-        console.log('Haciendo solicitud a /api/liquidations con id_sede:', id_sede);
+        console.log('Haciendo solicitud a /api/liquidations con id_sede:', idSede);
         const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
-          params: { id_sede }, // Incluir id_sede en la solicitud
+          params: { id_sede: idSede },
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'Cache-Control': 'no-cache', // Evitar caché en el cliente
+            'Cache-Control': 'no-cache',
           },
         });
         console.log('Liquidaciones obtenidas:', response.data);
@@ -77,37 +78,74 @@ const HistorialLiquidaciones: React.FC = () => {
     };
 
     loadHistorial();
-  }, [id_sede, navigate]); // Agregar dependencias
+  }, [navigate, idSede]);
+
+  const handleSelectGroup = (groupId: string) => {
+    setSelectedGroups((prev) =>
+      prev.includes(groupId)
+        ? prev.filter((id) => id !== groupId)
+        : [...prev, groupId]
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    try {
+      if (selectedGroups.length === 0) {
+        setError('Por favor, selecciona al menos un grupo para eliminar.');
+        return;
+      }
+
+      const groupsToDelete = historial
+        .filter((liquidacion) => selectedGroups.includes(liquidacion.id))
+        .map((liquidacion) => ({
+          doctor: liquidacion.doctor,
+          fecha_inicio: liquidacion.fecha_inicio,
+          fecha_final: liquidacion.fecha_final,
+          fecha_liquidacion: liquidacion.fecha_liquidacion,
+        }));
+
+      console.log('Enviando solicitud para eliminar grupos:', groupsToDelete);
+
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
+        data: { groups: groupsToDelete },
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Actualizar el estado eliminando los grupos seleccionados
+      setHistorial((prev) => prev.filter((liquidacion) => !selectedGroups.includes(liquidacion.id)));
+      setSelectedGroups([]); // Limpiar la selección
+      setError(''); // Limpiar cualquier error previo
+    } catch (err: any) {
+      console.error('Error al eliminar las liquidaciones:', err);
+      setError('Error al eliminar las liquidaciones. Por favor, intenta de nuevo.');
+    }
+  };
 
   const handleDescargarExcel = (liquidacion: LiquidacionHistorial) => {
-    const datos = liquidacion.servicios.flatMap((grupo) => {
-      const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-      const totalSesionesCompletadas = grupo.reduce(
-        (sum, registro) => sum + registro.sesiones_completadas,
-        0
-      );
-      const porcentaje = grupo[0].es_paciente_propio ? 50 : 40;
-      const totalALiquidar = totalGrupo * (porcentaje / 100);
-      const metodosPago = [...new Set(grupo.map((registro) => registro.metodo_pago))].join(', ');
-
-      return {
-        Paciente: grupo[0].nombre_paciente,
-        Servicio: grupo[0].servicio,
-        'Progreso Sesiones': `${totalSesionesCompletadas}/${grupo[0].sesiones_para_completar}`,
-        'Total Pagado': totalGrupo,
-        'Método de Pago': metodosPago,
-        'Tipo de Paciente': grupo[0].es_paciente_propio ? 'Propio (50%)' : 'Clínica (40%)',
-        Porcentaje: `${porcentaje}%`,
-        'Total a Liquidar': totalALiquidar,
-      };
-    });
+    const datos = liquidacion.servicios.map((registro) => ({
+      Paciente: registro.paciente,
+      Servicio: registro.nombre_serv,
+      Doctor: registro.nombre_doc || 'N/A',
+      Asistente: registro.nombre_aux || 'N/A',
+      Abono: formatCOP(registro.abono), // Formateamos para el Excel
+      Descuento: formatCOP(registro.dcto),
+      'Valor Total': formatCOP(registro.valor_total),
+      'Es Paciente Propio': registro.es_paciente_propio ? 'Sí' : 'No',
+      Porcentaje: registro.porcentaje ? `${registro.porcentaje}%` : 'N/A',
+      'Método de Pago': registro.metodoPago || 'N/A',
+      'Método de Pago Abono': registro.metodoPagoAbono || 'N/A',
+      'Valor Pagado': formatCOP(registro.valor_pagado),
+    }));
 
     const worksheet = XLSX.utils.json_to_sheet(datos);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Liquidación');
     XLSX.writeFile(
       workbook,
-      `Historial_Liquidacion_${liquidacion.doctor}_${liquidacion.fecha_liquidacion}.xlsx`
+      `Historial_Liquidacion_${liquidacion.doctor}_${liquidacion.fecha_inicio}.xlsx`
     );
   };
 
@@ -123,25 +161,44 @@ const HistorialLiquidaciones: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Historial de Liquidaciones - Clínica Smiley</h2>
 
+      {selectedGroups.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={handleDeleteSelected}
+            className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
+          >
+            Eliminar {selectedGroups.length} grupo(s) seleccionado(s)
+          </button>
+        </div>
+      )}
+
       {historial.length === 0 ? (
         <p className="text-gray-600 text-center">No hay liquidaciones registradas en el historial.</p>
       ) : (
         historial.map((liquidacion) => (
           <div key={liquidacion.id} className="bg-white shadow-lg rounded-lg p-6 mb-8">
             <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-800">
-                  Liquidación - {liquidacion.doctor}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Fecha de Liquidación: {liquidacion.fecha_liquidacion}
-                </p>
-                <p className="text-sm text-gray-600">
-                  Rango: {liquidacion.fecha_inicio} a {liquidacion.fecha_fin}
-                </p>
-                <p className="text-sm font-semibold text-blue-800">
-                  Total Liquidado: {formatCOP(liquidacion.total_liquidado)}
-                </p>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={selectedGroups.includes(liquidacion.id)}
+                  onChange={() => handleSelectGroup(liquidacion.id)}
+                  className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-800">
+                    Liquidación - {liquidacion.doctor}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Rango: {liquidacion.fecha_inicio} a {liquidacion.fecha_final}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Fecha de Liquidación: {liquidacion.fecha_liquidacion}
+                  </p>
+                  <p className="text-sm font-semibold text-blue-800">
+                    Total Liquidado: {formatCOP(liquidacion.total_liquidado)}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => handleDescargarExcel(liquidacion)}
@@ -162,65 +219,78 @@ const HistorialLiquidaciones: React.FC = () => {
                       Servicio
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Progreso Sesiones
+                      Doctor
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Total Pagado
+                      Asistente
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Método de Pago
+                      Abono
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Tipo de Paciente
+                      Descuento
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Valor Total
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Es Paciente Propio
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                       Porcentaje
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                      Total a Liquidar
+                      Método de Pago
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Método de Pago Abono
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Valor Pagado
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {liquidacion.servicios.map((grupo, index) => {
-                    const totalGrupo = grupo.reduce((sum, registro) => sum + registro.total, 0);
-                    const totalSesionesCompletadas = grupo.reduce(
-                      (sum, registro) => sum + registro.sesiones_completadas,
-                      0
-                    );
-                    const porcentaje = grupo[0].es_paciente_propio ? 50 : 40;
-                    const totalALiquidar = totalGrupo * (porcentaje / 100);
-                    const metodosPago = [...new Set(grupo.map((registro) => registro.metodo_pago))].join(', ');
-
-                    return (
-                      <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {grupo[0].nombre_paciente}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {grupo[0].servicio}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {totalSesionesCompletadas}/{grupo[0].sesiones_para_completar}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCOP(totalGrupo)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {metodosPago}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {grupo[0].es_paciente_propio ? 'Propio (50%)' : 'Clínica (40%)'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {porcentaje}%
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
-                          {formatCOP(totalALiquidar)}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {liquidacion.servicios.map((registro, index) => (
+                    <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.paciente}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.nombre_serv}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.nombre_doc || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.nombre_aux || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCOP(registro.abono)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCOP(registro.dcto)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCOP(registro.valor_total)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.es_paciente_propio ? 'Sí' : 'No'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.porcentaje ? `${registro.porcentaje}%` : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.metodoPago || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.metodoPagoAbono || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
+                        {formatCOP(registro.valor_pagado)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -231,4 +301,4 @@ const HistorialLiquidaciones: React.FC = () => {
   );
 };
 
-export default HistorialLiquidaciones;  
+export default HistorialLiquidaciones;
