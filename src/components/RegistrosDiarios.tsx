@@ -77,9 +77,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         setAsistentes(assistants);
         setServicios(services);
         setMetodosPago(paymentMethods);
-        setRegistros(records.data);
+        setRegistros(records.data as DentalRecord[]);
         setCuentas(accounts);
-      } catch (err) {
+      } catch {
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
       } finally {
         setLoading(false);
@@ -234,7 +234,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         metodoPago: formData.metodoPago,
         id_cuenta: formData.metodoPago === 'Transferencia' ? idCuenta : null,
         esAuxiliar: esAuxiliar,
-        id_sede: parseInt(id_sede, 10),
+        id_sede: parseInt(id_sede ?? '0', 10),
         valorPagado: formData.metodoPago ? parseFloat(valorPagado) : null,
         montoPrestado: formData.metodoPago === 'Crédito' ? parseFloat(montoPrestado) : null,
         titularCredito: formData.metodoPago === 'Crédito' ? titularCredito : null,
@@ -251,9 +251,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         }
       );
 
-      setRegistros([...registros, response.data]);
+      setRegistros([...registros, response.data as DentalRecord]);
       resetForm();
-    } catch (err) {
+    } catch {
       setError('Error al guardar el registro. Por favor, intenta de nuevo.');
     }
   };
@@ -267,12 +267,12 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     try {
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        data: { ids: selectedRecords, id_sede: parseInt(id_sede, 10) },
+        params: { ids: selectedRecords, id_sede: parseInt(id_sede ?? '0', 10) },
       });
 
       setRegistros(registros.filter((registro) => !selectedRecords.includes(registro.id)));
       setSelectedRecords([]);
-    } catch (err) {
+    } catch {
       setError('Error al eliminar los registros. Por favor, intenta de nuevo.');
     }
   };
@@ -676,19 +676,19 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     {registro.servicio}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCOP(registro.abono)}
+                    {formatCOP(registro.abono ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
+                    {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono ?? 0)})` : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCOP(registro.descuento)}
+                    {formatCOP(registro.descuento ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCOP(registro.valor_total)}
+                    {formatCOP(registro.valor_total ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCOP(registro.valor_liquidado)}

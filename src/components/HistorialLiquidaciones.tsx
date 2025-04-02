@@ -60,7 +60,7 @@ const HistorialLiquidaciones: React.FC = () => {
           },
         });
         console.log('Liquidaciones obtenidas:', response.data);
-        setHistorial(response.data);
+        setHistorial(response.data as LiquidacionHistorial[]);
       } catch (err: any) {
         console.error('Error al cargar el historial de liquidaciones:', err);
         if (err.response?.status === 401) {
@@ -107,7 +107,7 @@ const HistorialLiquidaciones: React.FC = () => {
       console.log('Enviando solicitud para eliminar grupos:', groupsToDelete);
 
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
-        data: { groups: groupsToDelete },
+        params: { groups: groupsToDelete },
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json',
