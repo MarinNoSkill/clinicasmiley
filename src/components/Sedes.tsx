@@ -30,7 +30,7 @@ const Sedes: React.FC = () => {
           }
         );
         setSedes(response.data);
-      } catch (err: any) {
+      } catch {
         setError('Error al cargar las sedes');
       } finally {
         setLoading(false);

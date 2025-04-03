@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import axios from 'axios';
 import Navbar from './components/Navbar';
-import SedesNavbar from './components/SedesNavbar';
 import RegistrosDiarios from './components/RegistrosDiarios';
 import Liquidacion from './components/Liquidacion';
 import EstandarizacionServicios from './components/EstandarizacionServicios';
@@ -9,6 +9,32 @@ import HistorialLiquidaciones from './components/HistorialLiquidaciones';
 import Login from './components/Login';
 import Sedes from './components/Sedes';
 import { DentalRecord } from './types';
+
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const { data } = await axios.post<{ token: string }>(`${import.meta.env.VITE_API_URL}/api/refresh-token`, {
+          token: localStorage.getItem('token'),
+        });
+        localStorage.setItem('token', data.token);
+        originalRequest.headers.Authorization = `Bearer ${data.token}`;
+        return axios(originalRequest);
+      } catch (err) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('selectedSede');
+        window.location.href = '/login';
+        return Promise.reject(err);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 
 const ProtectedRoute: React.FC<{ children: JSX.Element; adminOnly?: boolean }> = ({ children, adminOnly = false }) => {
   const token = localStorage.getItem('token');
