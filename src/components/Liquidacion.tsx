@@ -24,6 +24,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const [serviciosLiquidados, setServiciosLiquidados] = useState<DentalRecord[][]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [totalLiquidacion, setTotalLiquidacion] = useState<number>(0);
 
   const navigate = useNavigate();
   const id_sede = localStorage.getItem('selectedSede');
@@ -55,7 +56,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         setAsistentes(assistants);
         setServicios(services);
         setDoctorSeleccionado(doctors[0] || assistants[0] || '');
-        setRegistros(records.data);
+        setRegistros(records.data as DentalRecord[]);
       } catch (err) {
         console.error('Error al cargar los datos:', err);
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
@@ -102,31 +103,41 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     (grupo) => !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
   );
 
-  const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
-    const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
-    const idPorc = grupo[0].idPorc;
-    try {
-      const { data: porcentajeData } = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/porcentajes/${idPorc}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
-
-      const porcentaje = porcentajeData.porcentaje / 100;
-      const valorLiquidado = totalGrupo * porcentaje;
-      return valorLiquidado;
-    } catch (error) {
-      console.error('Error al obtener el porcentaje:', error);
-      const porcentaje = idPorc === 2 ? 0.5 : 0.4;
-      const valorLiquidado = totalGrupo * porcentaje;
-      return valorLiquidado;
+  const calcularPorcentaje = (grupo: DentalRecord[]) => {
+    if (esAuxiliar) {
+      return grupo[0].esPacientePropio ? 0.20 : 0.10; // 20% para pacientes propios, 10% para pacientes del consultorio
     }
+    const idPorc = grupo[0].idPorc;
+    return idPorc === 2 ? 0.50 : 0.40; // 50% o 40% para doctores según idPorc
   };
 
-  const [totalLiquidacion, setTotalLiquidacion] = useState<number>(0);
+  const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
+    const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
+    let porcentaje;
+
+    if (esAuxiliar) {
+      porcentaje = calcularPorcentaje(grupo);
+    } else {
+      const idPorc = grupo[0].idPorc;
+      try {
+        const { data: porcentajeData } = await axios.get(
+          `${import.meta.env.VITE_API_URL}/api/porcentajes/${idPorc}`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          }
+        );
+        porcentaje = porcentajeData.porcentaje / 100;
+      } catch (error) {
+        console.error('Error al obtener el porcentaje:', error);
+        porcentaje = idPorc === 2 ? 0.50 : 0.40; // Valor por defecto para doctores
+      }
+    }
+
+    const valorLiquidado = totalGrupo * porcentaje;
+    return valorLiquidado;
+  };
 
   useEffect(() => {
     const fetchTotalLiquidacion = async () => {
@@ -139,7 +150,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     };
 
     fetchTotalLiquidacion();
-  }, [serviciosCompletados]);
+  }, [serviciosCompletados, esAuxiliar]);
 
   const handleLiquidarGrupo = async (grupo: DentalRecord[]) => {
     try {
@@ -168,7 +179,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) },
+        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede || '0', 10) },
       });
 
       const registrosRestantes = registros.filter(
@@ -213,7 +224,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede, 10) },
+        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede || '0', 10) },
       });
 
       const registrosRestantes = registros.filter(
@@ -239,7 +250,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         ? grupo[0].sesiones
         : grupo.length;
       const sesionesTotales = grupo[0].sesiones || 1;
-      const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
+      const porcentaje = esAuxiliar
+        ? grupo[0].esPacientePropio
+          ? 20
+          : 10
+        : grupo[0].idPorc === 2
+        ? 50
+        : 40;
       const totalALiquidar = totalGrupo * (porcentaje / 100);
       const metodosPago = [
         ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
@@ -258,7 +275,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         'Total Pagado': totalGrupo,
         'Valor Total': registro.valor_total,
         'Valor Restante': registro.valor_liquidado,
-        'Tipo de Paciente': grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)',
+        'Tipo de Paciente': grupo[0].esPacientePropio
+          ? esAuxiliar
+            ? 'Propio (20%)'
+            : 'Propio (50%)'
+          : esAuxiliar
+          ? 'Clínica (10%)'
+          : 'Clínica (40%)',
         Porcentaje: `${porcentaje}%`,
         'Fecha Inicio': registro.fecha,
         'Fecha Final': registro.fechaFinal || 'Pendiente',
@@ -374,7 +397,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           </div>
           <div className="bg-green-100 p-4 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-green-900">Servicios Listos</h3>
-            <p className="text-2xl font-bold text-green-800">{serviciosCompletados.length}</p>
+            <p className="text-2xl font-bold text-green-800">{serviciosCompletados.length}</
+
+p>
           </div>
           <div className="bg-yellow-100 p-4 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-yellow-900">Servicios Pendientes</h3>
@@ -449,7 +474,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                     ? grupo[0].sesiones
                     : grupo.length;
                   const sesionesTotales = grupo[0].sesiones || 1;
-                  const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
+                  const porcentaje = esAuxiliar
+                    ? grupo[0].esPacientePropio
+                      ? 20
+                      : 10
+                    : grupo[0].idPorc === 2
+                    ? 50
+                    : 40;
                   const totalALiquidar = totalGrupo * (porcentaje / 100);
 
                   return (
@@ -459,19 +490,25 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono ?? 0)})` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
+                        {grupo[0].esPacientePropio
+                          ? esAuxiliar
+                            ? 'Propio (20%)'
+                            : 'Propio (50%)'
+                          : esAuxiliar
+                          ? 'Clínica (10%)'
+                          : 'Clínica (40%)'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
@@ -523,7 +560,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                     ? grupo[0].sesiones
                     : grupo.length;
                   const sesionesTotales = grupo[0].sesiones || 1;
-                  const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
+                  const porcentaje = esAuxiliar
+                    ? grupo[0].esPacientePropio
+                      ? 20
+                      : 10
+                    : grupo[0].idPorc === 2
+                    ? 50
+                    : 40;
                   const totalALiquidar = totalGrupo * (porcentaje / 100);
 
                   return (
@@ -533,19 +576,25 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono ?? 0)})` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
+                        {grupo[0].esPacientePropio
+                          ? esAuxiliar
+                            ? 'Propio (20%)'
+                            : 'Propio (50%)'
+                          : esAuxiliar
+                          ? 'Clínica (10%)'
+                          : 'Clínica (40%)'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
@@ -603,7 +652,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                     ? grupo[0].sesiones
                     : grupo.length;
                   const sesionesTotales = grupo[0].sesiones || 1;
-                  const porcentaje = grupo[0].idPorc === 2 ? 50 : 40;
+                  const porcentaje = esAuxiliar
+                    ? grupo[0].esPacientePropio
+                      ? 20
+                      : 10
+                    : grupo[0].idPorc === 2
+                    ? 50
+                    : 40;
 
                   return (
                     <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
@@ -612,19 +667,25 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono)})` : 'N/A'}
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono ?? 0)})` : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total ?? 0)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].esPacientePropio ? 'Propio (50%)' : 'Clínica (40%)'}
+                        {grupo[0].esPacientePropio
+                          ? esAuxiliar
+                            ? 'Propio (20%)'
+                            : 'Propio (50%)'
+                          : esAuxiliar
+                          ? 'Clínica (10%)'
+                          : 'Clínica (40%)'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
