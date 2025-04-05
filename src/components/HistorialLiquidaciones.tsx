@@ -29,16 +29,24 @@ interface LiquidacionHistorial {
   doctor: string;
   fecha_inicio: string;
   fecha_final: string;
-  fecha_liquidacion: string; // Agregamos fecha_liquidacion
+  fecha_liquidacion: string;
   servicios: DentalRecord[];
   total_liquidado: number;
 }
 
 const HistorialLiquidaciones: React.FC = () => {
   const [historial, setHistorial] = useState<LiquidacionHistorial[]>([]);
+  const [filteredHistorial, setFilteredHistorial] = useState<LiquidacionHistorial[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]); // Para almacenar los IDs de los grupos seleccionados
+  const [filters, setFilters] = useState({
+    fechaInicio: '',
+    fechaFinal: '',
+    doctor: '',
+    auxiliar: '',
+  });
+  const [doctores, setDoctores] = useState<string[]>([]);
+  const [auxiliares, setAuxiliares] = useState<string[]>([]);
 
   const navigate = useNavigate();
   const idSede = localStorage.getItem('selectedSede');
@@ -51,16 +59,27 @@ const HistorialLiquidaciones: React.FC = () => {
         }
 
         setLoading(true);
-        console.log('Haciendo solicitud a /api/liquidations con id_sede:', idSede);
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
+        const response = await axios.get<LiquidacionHistorial[]>(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
           params: { id_sede: idSede },
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Cache-Control': 'no-cache',
           },
         });
-        console.log('Liquidaciones obtenidas:', response.data);
-        setHistorial(response.data as LiquidacionHistorial[]);
+        const data = response.data;
+        setHistorial(data);
+        setFilteredHistorial(data);
+
+        const uniqueDoctores = Array.from(new Set(data.map((item) => item.doctor)));
+        const uniqueAuxiliares = Array.from(
+          new Set(
+            data.flatMap((item) => item.servicios.map((servicio) => servicio.nombre_aux)).filter(
+              (aux) => aux !== null
+            )
+          )
+        ) as string[];
+        setDoctores(uniqueDoctores);
+        setAuxiliares(uniqueAuxiliares);
       } catch (err: any) {
         console.error('Error al cargar el historial de liquidaciones:', err);
         if (err.response?.status === 401) {
@@ -80,49 +99,41 @@ const HistorialLiquidaciones: React.FC = () => {
     loadHistorial();
   }, [navigate, idSede]);
 
-  const handleSelectGroup = (groupId: string) => {
-    setSelectedGroups((prev) =>
-      prev.includes(groupId)
-        ? prev.filter((id) => id !== groupId)
-        : [...prev, groupId]
-    );
-  };
+  useEffect(() => {
+    const applyFilters = () => {
+      let filtered = [...historial];
 
-  const handleDeleteSelected = async () => {
-    try {
-      if (selectedGroups.length === 0) {
-        setError('Por favor, selecciona al menos un grupo para eliminar.');
-        return;
+      if (filters.fechaInicio) {
+        filtered = filtered.filter((item) => new Date(item.fecha_inicio) >= new Date(filters.fechaInicio));
+      }
+      if (filters.fechaFinal) {
+        filtered = filtered.filter((item) => new Date(item.fecha_final) <= new Date(filters.fechaFinal));
+      }
+      if (filters.doctor) {
+        filtered = filtered.filter((item) =>
+          item.doctor.toLowerCase().includes(filters.doctor.toLowerCase())
+        );
+      }
+      if (filters.auxiliar) {
+        filtered = filtered.filter((item) =>
+          item.servicios.some((servicio) =>
+            servicio.nombre_aux?.toLowerCase().includes(filters.auxiliar.toLowerCase())
+          )
+        );
       }
 
-      const groupsToDelete = historial
-        .filter((liquidacion) => selectedGroups.includes(liquidacion.id))
-        .map((liquidacion) => ({
-          doctor: liquidacion.doctor,
-          fecha_inicio: liquidacion.fecha_inicio,
-          fecha_final: liquidacion.fecha_final,
-          fecha_liquidacion: liquidacion.fecha_liquidacion,
-        }));
+      setFilteredHistorial(filtered);
+    };
 
-      console.log('Enviando solicitud para eliminar grupos:', groupsToDelete);
+    applyFilters();
+  }, [filters, historial]);
 
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/liquidations`, {
-        params: { groups: groupsToDelete },
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // Actualizar el estado eliminando los grupos seleccionados
-      setHistorial((prev) => prev.filter((liquidacion) => !selectedGroups.includes(liquidacion.id)));
-      setSelectedGroups([]); // Limpiar la selección
-      setError(''); // Limpiar cualquier error previo
-    } catch (err: any) {
-      console.error('Error al eliminar las liquidaciones:', err);
-      setError('Error al eliminar las liquidaciones. Por favor, intenta de nuevo.');
-    }
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
   };
+
+
 
   const handleDescargarExcel = (liquidacion: LiquidacionHistorial) => {
     const datos = liquidacion.servicios.map((registro) => ({
@@ -130,7 +141,7 @@ const HistorialLiquidaciones: React.FC = () => {
       Servicio: registro.nombre_serv,
       Doctor: registro.nombre_doc || 'N/A',
       Asistente: registro.nombre_aux || 'N/A',
-      Abono: formatCOP(registro.abono), // Formateamos para el Excel
+      Abono: formatCOP(registro.abono),
       Descuento: formatCOP(registro.dcto),
       'Valor Total': formatCOP(registro.valor_total),
       'Es Paciente Propio': registro.es_paciente_propio ? 'Sí' : 'No',
@@ -161,30 +172,71 @@ const HistorialLiquidaciones: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Historial de Liquidaciones - Clínica Smiley</h2>
 
-      {selectedGroups.length > 0 && (
-        <div className="mb-4">
-          <button
-            onClick={handleDeleteSelected}
-            className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
-          >
-            Eliminar {selectedGroups.length} grupo(s) seleccionado(s)
-          </button>
+      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Filtros</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha Inicio</label>
+            <input
+              type="date"
+              name="fechaInicio"
+              value={filters.fechaInicio}
+              onChange={handleFilterChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha Final</label>
+            <input
+              type="date"
+              name="fechaFinal"
+              value={filters.fechaFinal}
+              onChange={handleFilterChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Doctor</label>
+            <select
+              name="doctor"
+              value={filters.doctor}
+              onChange={handleFilterChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todos los doctores</option>
+              {doctores.map((doctor) => (
+                <option key={doctor} value={doctor}>
+                  {doctor}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Auxiliar</label>
+            <select
+              name="auxiliar"
+              value={filters.auxiliar}
+              onChange={handleFilterChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="">Todos los auxiliares</option>
+              {auxiliares.map((auxiliar) => (
+                <option key={auxiliar} value={auxiliar}>
+                  {auxiliar}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      )}
+      </div>
 
-      {historial.length === 0 ? (
-        <p className="text-gray-600 text-center">No hay liquidaciones registradas en el historial.</p>
+      {filteredHistorial.length === 0 ? (
+        <p className="text-gray-600 text-center">No hay liquidaciones que coincidan con los filtros.</p>
       ) : (
-        historial.map((liquidacion) => (
+        filteredHistorial.map((liquidacion) => (
           <div key={liquidacion.id} className="bg-white shadow-lg rounded-lg p-6 mb-8">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={selectedGroups.includes(liquidacion.id)}
-                  onChange={() => handleSelectGroup(liquidacion.id)}
-                  className="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
                 <div>
                   <h3 className="text-xl font-semibold text-gray-800">
                     Liquidación - {liquidacion.doctor}
