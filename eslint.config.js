@@ -25,10 +25,11 @@ export default tseslint.config(
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      'react-hooks/rules-of-hooks': 'error',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
+      ],
+      'react-hooks/rules-of-hooks': 'error',
       ],
     },
   }

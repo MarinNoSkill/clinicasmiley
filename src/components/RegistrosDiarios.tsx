@@ -79,7 +79,8 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         setMetodosPago(paymentMethods);
         setRegistros(records.data as DentalRecord[]);
         setCuentas(accounts);
-      } catch {
+      } catch (err) {
+        console.error('Error al cargar los datos:', err);
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
       } finally {
         setLoading(false);
@@ -173,12 +174,12 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       if (aplicarAbono) {
         abonoAjustado = parseFloat(abonoInput) || 0;
         if (esDatáfonoAbono) {
-          abonoAjustado *= 1.05;
+          abonoAjustado *= 1.00;
         }
       }
 
       if (esDatáfono) {
-        nuevoValorTotal *= 1.05;
+        nuevoValorTotal *= 1.00;
       }
     }
 
@@ -194,7 +195,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         setError('Por favor, ingresa el valor pagado.');
         return;
       }
-
       if (aplicarAbono && !metodoPagoAbono) {
         setError('Por favor, selecciona un método de pago para el abono.');
         return;
@@ -234,7 +234,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         metodoPago: formData.metodoPago,
         id_cuenta: formData.metodoPago === 'Transferencia' ? idCuenta : null,
         esAuxiliar: esAuxiliar,
-        id_sede: parseInt(id_sede ?? '0', 10),
+        id_sede: parseInt(id_sede || '0', 10),
         valorPagado: formData.metodoPago ? parseFloat(valorPagado) : null,
         montoPrestado: formData.metodoPago === 'Crédito' ? parseFloat(montoPrestado) : null,
         titularCredito: formData.metodoPago === 'Crédito' ? titularCredito : null,
@@ -252,8 +252,10 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       );
 
       setRegistros([...registros, response.data as DentalRecord]);
+      setSelectedRecords([]);
       resetForm();
-    } catch {
+    } catch (err) {
+      console.error('Error al cargar los datos:', err);
       setError('Error al guardar el registro. Por favor, intenta de nuevo.');
     }
   };
@@ -267,12 +269,14 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     try {
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        params: { ids: selectedRecords, id_sede: parseInt(id_sede ?? '0', 10) },
+        // este error es debido a que se usa "params" para axios, pero al realizarlo así, no funciona, con data sí.
+        data: { ids: selectedRecords, id_sede: parseInt(id_sede || '0', 10) },
       });
 
       setRegistros(registros.filter((registro) => !selectedRecords.includes(registro.id)));
       setSelectedRecords([]);
-    } catch {
+    } catch (err) {
+      console.error('Error al cargar los datos:', err);
       setError('Error al eliminar los registros. Por favor, intenta de nuevo.');
     }
   };
