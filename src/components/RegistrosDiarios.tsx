@@ -195,6 +195,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         setError('Por favor, ingresa el valor pagado.');
         return;
       }
+
       if (aplicarAbono && !metodoPagoAbono) {
         setError('Por favor, selecciona un método de pago para el abono.');
         return;
