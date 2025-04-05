@@ -105,10 +105,10 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
   const calcularPorcentaje = (grupo: DentalRecord[]) => {
     if (esAuxiliar) {
-      return grupo[0].esPacientePropio ? 0.20 : 0.10; // 20% para pacientes propios, 10% para pacientes del consultorio
+      return grupo[0].esPacientePropio ? 0.20 : 0.10; 
     }
     const idPorc = grupo[0].idPorc;
-    return idPorc === 2 ? 0.50 : 0.40; // 50% o 40% para doctores según idPorc
+    return idPorc === 2 ? 0.50 : 0.40; 
   };
 
   const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
@@ -131,7 +131,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         porcentaje = porcentajeData.porcentaje / 100;
       } catch (error) {
         console.error('Error al obtener el porcentaje:', error);
-        porcentaje = idPorc === 2 ? 0.50 : 0.40; // Valor por defecto para doctores
+        porcentaje = idPorc === 2 ? 0.50 : 0.40; 
       }
     }
 

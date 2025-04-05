@@ -17,7 +17,7 @@ export const fetchDoctors = async (id_sede: string): Promise<string[]> => {
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.data;
+  return response.data as string[];
 };
 
 export const fetchAssistants = async (id_sede: string): Promise<string[]> => {
@@ -28,7 +28,7 @@ export const fetchAssistants = async (id_sede: string): Promise<string[]> => {
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.data;
+  return response.data as string[];
 };
 
 export const fetchServices = async (): Promise<{ nombre: string; precio: number }[]> => {
@@ -38,7 +38,7 @@ export const fetchServices = async (): Promise<{ nombre: string; precio: number 
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.data;
+  return response.data as { nombre: string; precio: number }[];
 };
 
 export const fetchPaymentMethods = async (): Promise<string[]> => {
@@ -48,13 +48,13 @@ export const fetchPaymentMethods = async (): Promise<string[]> => {
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.data;
+  return response.data as string[];
 };
 
 // Nueva función para obtener las cuentas bancarias
 export const fetchAccounts = async (id_sede: string): Promise<{ id_cuenta: number; cuentas: string }[]> => {
   const token = localStorage.getItem('token');
-  const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/accounts`, {
+  const response = await axios.get<{ id_cuenta: number; cuentas: string }[]>(`${import.meta.env.VITE_API_URL}/api/accounts`, {
     params: { id_sede },
     headers: {
       Authorization: `Bearer ${token}`,
