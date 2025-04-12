@@ -15,9 +15,9 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   const [sedeActual, setSedeActual] = useState<string>('Cargando...');
-  const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario); // Verificamos si el usuario es Dueño o Admin
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario);
 
-  // Obtener el nombre de la sede actual desde el backend
   useEffect(() => {
     const fetchSedeActual = async () => {
       try {
@@ -55,25 +55,49 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
     localStorage.removeItem('selectedSede');
     onLogout();
     navigate('/sedes');
+    setIsMenuOpen(false);
   };
 
   const handleChangeSede = () => {
     navigate('/sedes');
+    setIsMenuOpen(false);
+  };
+
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
   };
 
   return (
     <nav className="bg-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <img
               src="/images/smileyface.webp"
               alt="Logo"
-              className="h-14 w-24 rounded-full"
+              className="h-12 w-20 rounded-full"
             />
             <span className="ml-2 text-xl font-semibold text-gray-900">Clínica Smiley</span>
           </div>
-          <div className="flex items-center space-x-8">
+          <div className="flex items-center md:hidden">
+            <button
+              onClick={toggleMenu}
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none"
+              aria-expanded={isMenuOpen}
+            >
+              <span className="sr-only">Abrir menú principal</span>
+              {isMenuOpen ? (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+              )}
+            </button>
+          </div>
+          <div className="hidden md:flex md:items-center md:space-x-8">
             <NavLink
               to="/"
               className={({ isActive }) =>
@@ -118,7 +142,6 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                 </NavLink>
               </>
             )}
-            {/* Mostrar la sede actual y opción para cambiarla */}
             <div className="flex items-center space-x-2">
               <span className="text-sm font-medium text-gray-700">
                 Sede: {sedeActual}
@@ -141,6 +164,79 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
           </div>
         </div>
       </div>
+      {isMenuOpen && (
+        <div className="md:hidden">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            <NavLink
+              to="/"
+              className={({ isActive }) =>
+                `block px-3 py-2 rounded-md text-base font-medium ${
+                  isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                }`
+              }
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Registros Diarios
+            </NavLink>
+            {isAdminOrOwner && (
+              <>
+                <NavLink
+                  to="/liquidacion"
+                  className={({ isActive }) =>
+                    `block px-3 py-2 rounded-md text-base font-medium ${
+                      isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                    }`
+                  }
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Liquidación
+                </NavLink>
+                <NavLink
+                  to="/estandarizacion"
+                  className={({ isActive }) =>
+                    `block px-3 py-2 rounded-md text-base font-medium ${
+                      isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                    }`
+                  }
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Estandarización de Servicios
+                </NavLink>
+                <NavLink
+                  to="/historial"
+                  className={({ isActive }) =>
+                    `block px-3 py-2 rounded-md text-base font-medium ${
+                      isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                    }`
+                  }
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Historial de Liquidaciones
+                </NavLink>
+              </>
+            )}
+            <div className="px-3 py-2 flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-700">
+                Sede: {sedeActual}
+              </span>
+              <button
+                onClick={handleChangeSede}
+                className="text-sm font-medium text-blue-500 hover:text-blue-700"
+              >
+                Cambiar
+              </button>
+            </div>
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-500 hover:text-red-700 hover:bg-gray-50"
+              >
+                Cerrar Sesión
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
