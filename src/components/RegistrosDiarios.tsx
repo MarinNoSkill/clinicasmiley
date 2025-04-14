@@ -9,6 +9,17 @@ interface RegistrosDiariosProps {
   setRegistros: (registros: DentalRecord[]) => void;
 }
 
+interface FormData {
+  nombreDoctor: string;
+  nombrePaciente: string;
+  docId: string;
+  servicio: string[];
+  abono: number | null;
+  descuento: number | null;
+  fecha: string;
+  metodoPago: string;
+}
+
 const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegistros }) => {
   const hoy = new Date().toISOString().split('T')[0];
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
@@ -20,6 +31,19 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [tabs, setTabs] = useState<FormData[]>([
+    {
+      nombreDoctor: '',
+      nombrePaciente: '',
+      docId: '',
+      servicio: [''],
+      abono: null,
+      descuento: null,
+      fecha: hoy,
+      metodoPago: '',
+    },
+  ]);
+  const [activeTab, setActiveTab] = useState<number>(0);
   const [esAuxiliar, setEsAuxiliar] = useState<boolean>(false);
   const [esPacientePropio, setEsPacientePropio] = useState<boolean>(false);
   const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
@@ -31,21 +55,18 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [metodoPagoAbono, setMetodoPagoAbono] = useState<string>('');
   const [idCuenta, setIdCuenta] = useState<number | null>(null);
   const [idCuentaAbono, setIdCuentaAbono] = useState<number | null>(null);
-  const [montoPrestado, setMontoPrestado] = useState<string>(''); // Para Crédito
-  const [titularCredito, setTitularCredito] = useState<string>(''); // Para Crédito
-  const [esDatáfono, setEsDatáfono] = useState<boolean>(false); // Estado explícito para Datáfono (pago principal)
-  const [esDatáfonoAbono, setEsDatáfonoAbono] = useState<boolean>(false); // Estado explícito para Datáfono (abono)
+  const [montoPrestado, setMontoPrestado] = useState<string>('');
+  const [titularCredito, setTitularCredito] = useState<string>('');
+  const [esDatáfono, setEsDatáfono] = useState<boolean>(false);
+  const [esDatáfonoAbono, setEsDatáfonoAbono] = useState<boolean>(false);
+  const [pacientesCoincidentes, setPacientesCoincidentes] = useState<
+    { paciente: string; doc_id: string; tot_abono: number }[]
+  >([]);
+  const [mostrarListaPacientes, setMostrarListaPacientes] = useState<boolean>(false);
+  const [saldoAFavor, setSaldoAFavor] = useState<number>(0);
 
-  const [formData, setFormData] = useState({
-    nombreDoctor: '',
-    nombrePaciente: '',
-    docId: '',
-    servicio: '',
-    abono: null as number | null,
-    descuento: null as number | null,
-    fecha: hoy,
-    metodoPago: '',
-  });
+  const MAX_SERVICES = 5;
+  const MAX_TABS = 7;
 
   const navigate = useNavigate();
   const id_sede = localStorage.getItem('selectedSede');
@@ -91,20 +112,21 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   }, [setRegistros, id_sede, navigate]);
 
   useEffect(() => {
-    setFormData((prev) => ({ ...prev, nombreDoctor: '' }));
+    updateTab(activeTab, (prev) => ({ ...prev, nombreDoctor: '' }));
   }, [esAuxiliar]);
 
   useEffect(() => {
-    if (!formData.metodoPago) {
+    const metodoPago = tabs[activeTab].metodoPago;
+    if (!metodoPago) {
       setValorPagado('');
       setIdCuenta(null);
       setMontoPrestado('');
       setTitularCredito('');
       setEsDatáfono(false);
     } else {
-      setEsDatáfono(formData.metodoPago.trim().toLowerCase() === 'datáfono');
+      setEsDatáfono(metodoPago.trim().toLowerCase() === 'datáfono');
     }
-  }, [formData.metodoPago]);
+  }, [tabs, activeTab]);
 
   useEffect(() => {
     if (!aplicarAbono || !metodoPagoAbono) {
@@ -124,17 +146,116 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     }
   }, [aplicarDescuento]);
 
-  const resetForm = () => {
-    setFormData({
-      nombreDoctor: '',
-      nombrePaciente: '',
-      docId: '',
-      servicio: '',
-      abono: null,
-      descuento: null,
-      fecha: hoy,
-      metodoPago: '',
+  const updateTab = (tabIndex: number, update: (prev: FormData) => FormData) => {
+    setTabs((prevTabs) => {
+      const newTabs = [...prevTabs];
+      newTabs[tabIndex] = update(newTabs[tabIndex]);
+      return newTabs;
     });
+  };
+
+  const addTab = () => {
+    if (tabs.length >= MAX_TABS) {
+      setError('No puedes agregar más pestañas. Máximo permitido: ' + MAX_TABS);
+      return;
+    }
+    setTabs((prevTabs) => [
+      ...prevTabs,
+      {
+        nombreDoctor: '',
+        nombrePaciente: '',
+        docId: '',
+        servicio: [''],
+        abono: null,
+        descuento: null,
+        fecha: hoy,
+        metodoPago: '',
+      },
+    ]);
+    setActiveTab(tabs.length);
+    resetStates();
+  };
+
+  const removeTab = (tabIndex: number) => {
+    if (tabs.length === 1) {
+      setError('No puedes eliminar la última pestaña.');
+      return;
+    }
+    setTabs((prevTabs) => prevTabs.filter((_, index) => index !== tabIndex));
+    setActiveTab((prev) => {
+      if (prev === tabIndex) {
+        return Math.max(0, prev - 1);
+      }
+      return prev > tabIndex ? prev - 1 : prev;
+    });
+    resetStates();
+  };
+
+  const addService = () => {
+    const currentServices = tabs[activeTab].servicio;
+    if (currentServices.length >= MAX_SERVICES) {
+      setError('No puedes agregar más servicios. Máximo permitido: ' + MAX_SERVICES);
+      return;
+    }
+    updateTab(activeTab, (prev) => ({
+      ...prev,
+      servicio: [...prev.servicio, ''],
+    }));
+  };
+
+  const removeService = (serviceIndex: number) => {
+    const currentServices = tabs[activeTab].servicio;
+    if (currentServices.length === 1) {
+      setError('No puedes eliminar el último servicio.');
+      return;
+    }
+    updateTab(activeTab, (prev) => ({
+      ...prev,
+      servicio: prev.servicio.filter((_, index) => index !== serviceIndex),
+    }));
+  };
+
+  const updateService = (serviceIndex: number, value: string) => {
+    updateTab(activeTab, (prev) => {
+      const newServices = [...prev.servicio];
+      newServices[serviceIndex] = value;
+      return { ...prev, servicio: newServices };
+    });
+  };
+
+  const buscarPacientes = async (nombre: string) => {
+    if (nombre.length < 2) {
+      setPacientesCoincidentes([]);
+      setMostrarListaPacientes(false);
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/patients/search`, {
+        params: { nombre },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      setPacientesCoincidentes(response.data);
+      setMostrarListaPacientes(true);
+    } catch (err) {
+      console.error('Error al buscar pacientes:', err);
+      setError('Error al buscar pacientes. Por favor, intenta de nuevo.');
+    }
+  };
+
+  const seleccionarPaciente = (paciente: { paciente: string; doc_id: string; tot_abono: number }) => {
+    updateTab(activeTab, (prev) => ({
+      ...prev,
+      nombrePaciente: paciente.paciente,
+      docId: paciente.doc_id,
+      servicio: prev.servicio,
+    }));
+    setSaldoAFavor(paciente.tot_abono || 0);
+    setPacientesCoincidentes([]);
+    setMostrarListaPacientes(false);
+  };
+
+  const resetStates = () => {
     setEsAuxiliar(false);
     setEsPacientePropio(false);
     setAplicarDescuento(false);
@@ -150,48 +271,108 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     setTitularCredito('');
     setEsDatáfono(false);
     setEsDatáfonoAbono(false);
+    setSaldoAFavor(0);
+    setPacientesCoincidentes([]);
+    setMostrarListaPacientes(false);
   };
 
-  const calcularDescuentoYValorTotal = () => {
-    let descuentoFinal: number = 0;
-    let nuevoValorTotal: number = 0;
-    let abonoAjustado: number = 0;
-    const servicioSeleccionado = servicios.find((s) => s.nombre === formData.servicio);
+  const resetForm = () => {
+    setTabs([
+      {
+        nombreDoctor: '',
+        nombrePaciente: '',
+        docId: '',
+        servicio: [''],
+        abono: null,
+        descuento: null,
+        fecha: hoy,
+        metodoPago: '',
+      },
+    ]);
+    setActiveTab(0);
+    resetStates();
+  };
 
-    if (servicioSeleccionado) {
-      nuevoValorTotal = servicioSeleccionado.precio;
+  const calcularValores = (serviciosSeleccionados: string[]) => {
+    let valorTotal = 0;
+    let descuentoFinal = 0;
+    let nuevoValorServicio = 0;
+    let abonoAjustado = 0;
 
-      if (aplicarDescuento) {
-        const descuentoValue = parseFloat(descuentoInput) || 0;
-        if (esPorcentaje) {
-          descuentoFinal = (nuevoValorTotal * descuentoValue) / 100;
+    const currentTab = tabs[activeTab];
+    serviciosSeleccionados.forEach((servicioNombre) => {
+      const servicioSeleccionado = servicios.find((s) => s.nombre === servicioNombre);
+      if (servicioSeleccionado) {
+        // Buscar un registro existente para este servicio y paciente con fecha_final null
+        const ongoingService = registros.find(
+          (record) =>
+            record.docId === currentTab.docId &&
+            record.servicio === servicioNombre &&
+            !record.fechaFinal // Equivalente a fecha_final IS NULL
+        );
+
+        if (ongoingService) {
+          // Si hay un servicio en curso, usar valor_liquidado y valor_total del registro existente
+          nuevoValorServicio += ongoingService.valor_liquidado;
+          valorTotal += ongoingService.valor_total;
         } else {
-          descuentoFinal = descuentoValue;
-        }
-        nuevoValorTotal -= descuentoFinal;
-      }
-
-      if (aplicarAbono) {
-        abonoAjustado = parseFloat(abonoInput) || 0;
-        if (esDatáfonoAbono) {
-          abonoAjustado *= 1.00;
+          // Si no hay servicio en curso, usar precio del servicio
+          nuevoValorServicio += servicioSeleccionado.precio;
+          valorTotal += servicioSeleccionado.precio;
         }
       }
+    });
 
-      if (esDatáfono) {
-        nuevoValorTotal *= 1.00;
+    nuevoValorServicio -= saldoAFavor;
+    if (nuevoValorServicio < 0) {
+      nuevoValorServicio = 0;
+    }
+
+    if (aplicarDescuento) {
+      const descuentoValue = parseFloat(descuentoInput) || 0;
+      if (esPorcentaje) {
+        descuentoFinal = (valorTotal * descuentoValue) / 100;
+      } else {
+        descuentoFinal = descuentoValue;
+      }
+      nuevoValorServicio -= descuentoFinal;
+      if (nuevoValorServicio < 0) {
+        nuevoValorServicio = 0;
       }
     }
 
-    return { descuentoFinal, nuevoValorTotal, abonoAjustado };
+    if (aplicarAbono) {
+      abonoAjustado = parseFloat(abonoInput) || 0;
+      if (esDatáfonoAbono) {
+        abonoAjustado *= 1.00;
+      }
+    }
+
+    if (esDatáfono) {
+      nuevoValorServicio *= 1.00;
+    }
+
+    return { valorTotal, descuentoFinal, nuevoValorServicio, abonoAjustado };
   };
 
-  const { descuentoFinal, nuevoValorTotal, abonoAjustado } = calcularDescuentoYValorTotal();
+  const fetchUpdatedRecords = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
+        params: { id_sede },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      setRegistros(response.data as DentalRecord[]);
+    } catch (err) {
+      console.error('Error al actualizar los registros:', err);
+      setError('Error al actualizar los registros. Por favor, intenta de nuevo.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (formData.metodoPago && !valorPagado) {
+      const currentTab = tabs[activeTab];
+      if (currentTab.metodoPago && !valorPagado) {
         setError('Por favor, ingresa el valor pagado.');
         return;
       }
@@ -201,7 +382,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         return;
       }
 
-      if (formData.metodoPago === 'Transferencia' && !idCuenta) {
+      if (currentTab.metodoPago === 'Transferencia' && !idCuenta) {
         setError('Por favor, selecciona una cuenta para la transferencia (valor pagado).');
         return;
       }
@@ -210,7 +391,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         return;
       }
 
-      if (formData.metodoPago === 'Crédito') {
+      if (currentTab.metodoPago === 'Crédito') {
         if (!montoPrestado || parseFloat(montoPrestado) <= 0) {
           setError('Por favor, ingresa un monto prestado válido para Crédito.');
           return;
@@ -221,42 +402,75 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         }
       }
 
-      const newRecord = {
-        nombreDoctor: formData.nombreDoctor,
-        nombrePaciente: formData.nombrePaciente,
-        docId: formData.docId,
-        servicio: formData.servicio,
+      const { valorTotal, descuentoFinal, nuevoValorServicio, abonoAjustado } = calcularValores(currentTab.servicio);
+
+      // Validar que todos los servicios estén seleccionados
+      const serviciosValidos = currentTab.servicio.filter((s) => s);
+      if (serviciosValidos.length === 0) {
+        setError('Por favor, selecciona al menos un servicio válido.');
+        return;
+      }
+
+      // Crear la lista de servicios para enviar al backend
+      const serviciosPayload = serviciosValidos.map((servicio) => {
+        const servicioData = servicios.find((s) => s.nombre === servicio);
+        if (!servicioData) {
+          throw new Error('Servicio no encontrado.');
+        }
+
+        // Buscar un registro existente para este servicio y paciente con fecha_final null
+        const ongoingService = registros.find(
+          (record) =>
+            record.docId === currentTab.docId &&
+            record.servicio === servicio &&
+            !record.fechaFinal
+        );
+
+        return {
+          servicio,
+          valor_total: ongoingService ? ongoingService.valor_total : servicioData.precio,
+          valor_liquidado: ongoingService ? ongoingService.valor_liquidado : servicioData.precio,
+        };
+      });
+
+      const payload = {
+        nombreDoctor: currentTab.nombreDoctor,
+        nombrePaciente: currentTab.nombrePaciente,
+        docId: currentTab.docId,
+        servicios: serviciosPayload, // Enviar lista de servicios
         abono: aplicarAbono ? abonoAjustado : null,
         metodoPagoAbono: aplicarAbono ? metodoPagoAbono : null,
         id_cuenta_abono: aplicarAbono && metodoPagoAbono === 'Transferencia' ? idCuentaAbono : null,
         descuento: aplicarDescuento ? descuentoFinal : null,
         esPacientePropio: esPacientePropio,
         fecha: fechaSeleccionada,
-        metodoPago: formData.metodoPago,
-        id_cuenta: formData.metodoPago === 'Transferencia' ? idCuenta : null,
+        metodoPago: currentTab.metodoPago,
+        id_cuenta: currentTab.metodoPago === 'Transferencia' ? idCuenta : null,
         esAuxiliar: esAuxiliar,
         id_sede: parseInt(id_sede || '0', 10),
-        valorPagado: formData.metodoPago ? parseFloat(valorPagado) : null,
-        montoPrestado: formData.metodoPago === 'Crédito' ? parseFloat(montoPrestado) : null,
-        titularCredito: formData.metodoPago === 'Crédito' ? titularCredito : null,
+        valorPagado: currentTab.metodoPago ? parseFloat(valorPagado) : null,
+        montoPrestado: currentTab.metodoPago === 'Crédito' ? parseFloat(montoPrestado) : null,
+        titularCredito: currentTab.metodoPago === 'Crédito' ? titularCredito : null,
         esDatáfono: esDatáfono,
         esDatáfonoAbono: aplicarAbono ? esDatáfonoAbono : null,
-        valor_total: nuevoValorTotal,
       };
 
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/records`,
-        newRecord,
+        payload,
         {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         }
       );
 
-      setRegistros([...registros, response.data as DentalRecord]);
+      // El backend ahora devuelve una lista de registros creados/actualizados
+      const newRecords = Array.isArray(response.data) ? response.data : [response.data];
+      await fetchUpdatedRecords();
+
       setSelectedRecords([]);
       resetForm();
     } catch (err) {
-      console.error('Error al cargar los datos:', err);
+      console.error('Error al guardar el registro:', err);
       setError('Error al guardar el registro. Por favor, intenta de nuevo.');
     }
   };
@@ -270,14 +484,13 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     try {
       await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        // este error es debido a que se usa "params" para axios, pero al realizarlo así, no funciona, con data sí.
         data: { ids: selectedRecords, id_sede: parseInt(id_sede || '0', 10) },
       });
 
       setRegistros(registros.filter((registro) => !selectedRecords.includes(registro.id)));
       setSelectedRecords([]);
     } catch (err) {
-      console.error('Error al cargar los datos:', err);
+      console.error('Error al eliminar los registros:', err);
       setError('Error al eliminar los registros. Por favor, intenta de nuevo.');
     }
   };
@@ -308,6 +521,50 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         </div>
       </div>
 
+      <div className="mb-4">
+        <div className="flex items-center space-x-1 border-b border-gray-200">
+          {tabs.map((_, index) => (
+            <div key={index} className="relative flex items-center">
+              <button
+                onClick={() => {
+                  setActiveTab(index);
+                  resetStates();
+                }}
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 ${
+                  activeTab === index
+                    ? 'bg-white text-blue-600 border border-b-0 border-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Registro {index + 1}
+                {tabs.length > 1 && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation(); // Evitar que el click en la "X" cambie la pestaña activa
+                      removeTab(index);
+                    }}
+                    className="ml-2 text-gray-500 hover:text-red-600 cursor-pointer"
+                  >
+                    ×
+                  </span>
+                )}
+                {activeTab === index && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-600"></span>
+                )}
+              </button>
+            </div>
+          ))}
+          {tabs.length < MAX_TABS && (
+            <button
+              onClick={addTab}
+              className="flex items-center justify-center px-2 py-1 text-sm font-medium text-white bg-blue-600 rounded-t-lg hover:bg-blue-700 transition-all duration-200"
+            >
+              +
+            </button>
+          )}
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
@@ -328,8 +585,8 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               {esAuxiliar ? 'Auxiliar' : 'Doctor/a'}
             </label>
             <select
-              value={formData.nombreDoctor}
-              onChange={(e) => setFormData({ ...formData, nombreDoctor: e.target.value })}
+              value={tabs[activeTab].nombreDoctor}
+              onChange={(e) => updateTab(activeTab, (prev) => ({ ...prev, nombreDoctor: e.target.value }))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
             >
@@ -342,43 +599,104 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
             </select>
           </div>
 
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del Paciente</label>
             <input
               type="text"
-              value={formData.nombrePaciente}
-              onChange={(e) => setFormData({ ...formData, nombrePaciente: e.target.value })}
+              value={tabs[activeTab].nombrePaciente}
+              onChange={(e) => {
+                updateTab(activeTab, (prev) => ({ ...prev, nombrePaciente: e.target.value }));
+                buscarPacientes(e.target.value);
+              }}
+              onFocus={() => setMostrarListaPacientes(true)}
+              onBlur={() => setTimeout(() => setMostrarListaPacientes(false), 200)}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
             />
+            {mostrarListaPacientes && pacientesCoincidentes.length > 0 && (
+              <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {pacientesCoincidentes.map((paciente) => (
+                  <li
+                    key={paciente.doc_id}
+                    onClick={() => seleccionarPaciente(paciente)}
+                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                  >
+                    {paciente.paciente} | {paciente.doc_id}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Documento del Paciente</label>
             <input
               type="text"
-              value={formData.docId}
-              onChange={(e) => setFormData({ ...formData, docId: e.target.value })}
+              value={tabs[activeTab].docId}
+              onChange={(e) => updateTab(activeTab, (prev) => ({ ...prev, docId: e.target.value }))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Servicio</label>
-            <select
-              value={formData.servicio}
-              onChange={(e) => setFormData({ ...formData, servicio: e.target.value })}
-              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              required
-            >
-              <option value="">Selecciona un servicio</option>
-              {servicios.map((servicio) => (
-                <option key={servicio.nombre} value={servicio.nombre}>
-                  {servicio.nombre} ({formatCOP(servicio.precio)})
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Servicios</label>
+            {tabs[activeTab].servicio.map((servicio, index) => (
+              <div key={index} className="flex items-center space-x-2 mb-2">
+                <select
+                  value={servicio}
+                  onChange={(e) => updateService(index, e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Selecciona un servicio</option>
+                  {servicios.map((s) => {
+                    // Buscar si hay un servicio en curso para este servicio y paciente
+                    const ongoingService = registros.find(
+                      (record) =>
+                        record.docId === tabs[activeTab].docId &&
+                        record.servicio === s.nombre &&
+                        !record.fechaFinal
+                    );
+                    return (
+                      <option key={s.nombre} value={s.nombre}>
+                        {s.nombre} ({formatCOP(ongoingService ? ongoingService.valor_liquidado : s.precio)})
+                      </option>
+                    );
+                  })}
+                </select>
+                {tabs[activeTab].servicio.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeService(index)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    -
+                  </button>
+                )}
+              </div>
+            ))}
+            {tabs[activeTab].servicio.length < MAX_SERVICES && (
+              <button
+                type="button"
+                onClick={addService}
+                className="mt-2 text-blue-600 hover:text-blue-800"
+              >
+                + Agregar Servicio
+              </button>
+            )}
+            {tabs[activeTab].servicio.some((s) => s) && (
+              <div className="mt-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Nuevo Valor del Servicio: {formatCOP(calcularValores(tabs[activeTab].servicio).nuevoValorServicio)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Saldo a Favor</label>
+            <span className="text-sm text-gray-600">{formatCOP(saldoAFavor)}</span>
           </div>
 
           <div>
@@ -417,17 +735,16 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                           step="1000"
                           value={abonoInput}
                           onChange={(e) => setAbonoInput(e.target.value)}
-                          className="w-full rounded-md patient's border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                           required
                         />
                         {esDatáfonoAbono && (
                           <span className="text-sm text-gray-600">
-                            Abono Ajustado: {formatCOP(abonoAjustado)}
+                            Abono Ajustado: {formatCOP(parseFloat(abonoInput) || 0)}
                           </span>
                         )}
                       </div>
                     </div>
-
                     {metodoPagoAbono === 'Transferencia' && (
                       <div className="mt-2">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Cuenta (Abono)</label>
@@ -483,11 +800,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
                     />
-                    {formData.servicio && (
-                      <span className="text-sm text-gray-600">
-                        Nuevo Valor Total: {formatCOP(nuevoValorTotal)}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -497,8 +809,8 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
             <select
-              value={formData.metodoPago}
-              onChange={(e) => setFormData({ ...formData, metodoPago: e.target.value })}
+              value={tabs[activeTab].metodoPago}
+              onChange={(e) => updateTab(activeTab, (prev) => ({ ...prev, metodoPago: e.target.value }))}
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
               <option value="">Selecciona un método de pago</option>
@@ -508,7 +820,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 </option>
               ))}
             </select>
-            {formData.metodoPago && (
+            {tabs[activeTab].metodoPago && (
               <>
                 <div className="mt-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Valor Pagado (COP)</label>
@@ -522,14 +834,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
                     />
-                    {formData.servicio && (
-                      <span className="text-sm text-gray-600">
-                        Nuevo Valor del Servicio: {formatCOP(nuevoValorTotal)}
-                      </span>
-                    )}
                   </div>
                 </div>
-                {formData.metodoPago === 'Transferencia' && (
+                {tabs[activeTab].metodoPago === 'Transferencia' && (
                   <div className="mt-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cuenta (Valor Pagado)</label>
                     <select
@@ -547,7 +854,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     </select>
                   </div>
                 )}
-                {formData.metodoPago === 'Crédito' && (
+                {tabs[activeTab].metodoPago === 'Crédito' && (
                   <>
                     <div className="mt-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Monto Prestado (COP)</label>
@@ -690,13 +997,13 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     {formatCOP(registro.descuento ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
+                    {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado ?? 0)})` : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCOP(registro.valor_total ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCOP(registro.valor_liquidado)}
+                    {formatCOP(registro.valor_liquidado ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {registro.fecha}

@@ -56,7 +56,12 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         setAsistentes(assistants);
         setServicios(services);
         setDoctorSeleccionado(doctors[0] || assistants[0] || '');
-        setRegistros(records.data as DentalRecord[]);
+        // Filtrar registros con estado false o null
+        setRegistros(
+          records.data.filter(
+            (record: DentalRecord) => record.estado === false || record.estado === null
+          ) as DentalRecord[]
+        );
       } catch (err) {
         console.error('Error al cargar los datos:', err);
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
@@ -105,10 +110,10 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
   const calcularPorcentaje = (grupo: DentalRecord[]) => {
     if (esAuxiliar) {
-      return grupo[0].esPacientePropio ? 0.20 : 0.10; // 20% para pacientes propios, 10% para pacientes del consultorio
+      return grupo[0].esPacientePropio ? 0.20 : 0.10;
     }
     const idPorc = grupo[0].idPorc;
-    return idPorc === 2 ? 0.50 : 0.40; // 50% o 40% para doctores según idPorc
+    return idPorc === 2 ? 0.50 : 0.40;
   };
 
   const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
@@ -131,7 +136,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         porcentaje = porcentajeData.porcentaje / 100;
       } catch (error) {
         console.error('Error al obtener el porcentaje:', error);
-        porcentaje = idPorc === 2 ? 0.50 : 0.40; // Valor por defecto para doctores
+        porcentaje = idPorc === 2 ? 0.50 : 0.40;
       }
     }
 
@@ -174,14 +179,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
+      // No eliminamos los registros, solo los filtramos del estado local
       const idsServiciosLiquidados = grupo.map((registro) => registro.id);
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede || '0', 10) },
-      });
-
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
@@ -217,16 +216,10 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
+      // No eliminamos los registros, solo los filtramos del estado local
       const idsServiciosLiquidados = serviciosCompletados.flatMap((grupo) =>
         grupo.map((registro) => registro.id)
       );
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        data: { ids: idsServiciosLiquidados, id_sede: parseInt(id_sede || '0', 10) },
-      });
-
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
@@ -397,9 +390,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           </div>
           <div className="bg-green-100 p-4 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-green-900">Servicios Listos</h3>
-            <p className="text-2xl font-bold text-green-800">{serviciosCompletados.length}</
-
-p>
+            <p className="text-2xl font-bold text-green-800">{serviciosCompletados.length}</p>
           </div>
           <div className="bg-yellow-100 p-4 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-yellow-900">Servicios Pendientes</h3>

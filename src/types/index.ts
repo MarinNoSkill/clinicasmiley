@@ -15,6 +15,7 @@ export interface DentalRecord {
   idPorc: number;
   valor_liquidado: number;
   valor_pagado: number; 
+  estado?: boolean; // Añadido para manejar el estado de liquidación
   id_cuenta: number | null;
   id_cuenta_abono: number | null;
   esPacientePropio: boolean;
