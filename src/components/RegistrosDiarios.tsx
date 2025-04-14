@@ -235,7 +235,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         params: { nombre },
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
-      setPacientesCoincidentes(response.data);
+      setPacientesCoincidentes(response.data as { paciente: string; doc_id: string; tot_abono: number }[]);
       setMostrarListaPacientes(true);
     } catch (err) {
       console.error('Error al buscar pacientes:', err);
@@ -314,7 +314,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         if (ongoingService) {
           // Si hay un servicio en curso, usar valor_liquidado y valor_total del registro existente
           nuevoValorServicio += ongoingService.valor_liquidado;
-          valorTotal += ongoingService.valor_total;
+          valorTotal += ongoingService.valor_total || 0;
         } else {
           // Si no hay servicio en curso, usar precio del servicio
           nuevoValorServicio += servicioSeleccionado.precio;
@@ -509,7 +509,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Registros Diarios - Clínica Smiley</h2>
+        <h2 className="text-3xl font-bold text-gray-800 mb-8">Registros Diarios - Clínica Smiley</h2>
         <div className="flex items-center space-x-2">
           <label className="text-sm font-medium text-gray-700">Fecha:</label>
           <input
