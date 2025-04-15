@@ -303,20 +303,17 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     serviciosSeleccionados.forEach((servicioNombre) => {
       const servicioSeleccionado = servicios.find((s) => s.nombre === servicioNombre);
       if (servicioSeleccionado) {
-        // Buscar un registro existente para este servicio y paciente con fecha_final null
         const ongoingService = registros.find(
           (record) =>
             record.docId === currentTab.docId &&
             record.servicio === servicioNombre &&
-            !record.fechaFinal // Equivalente a fecha_final IS NULL
+            !record.fechaFinal
         );
 
         if (ongoingService) {
-          // Si hay un servicio en curso, usar valor_liquidado y valor_total del registro existente
           nuevoValorServicio += ongoingService.valor_liquidado;
           valorTotal += ongoingService.valor_total || 0;
         } else {
-          // Si no hay servicio en curso, usar precio del servicio
           nuevoValorServicio += servicioSeleccionado.precio;
           valorTotal += servicioSeleccionado.precio;
         }
@@ -404,21 +401,18 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
       const { valorTotal, descuentoFinal, nuevoValorServicio, abonoAjustado } = calcularValores(currentTab.servicio);
 
-      // Validar que todos los servicios estén seleccionados
       const serviciosValidos = currentTab.servicio.filter((s) => s);
       if (serviciosValidos.length === 0) {
         setError('Por favor, selecciona al menos un servicio válido.');
         return;
       }
 
-      // Crear la lista de servicios para enviar al backend
       const serviciosPayload = serviciosValidos.map((servicio) => {
         const servicioData = servicios.find((s) => s.nombre === servicio);
         if (!servicioData) {
           throw new Error('Servicio no encontrado.');
         }
 
-        // Buscar un registro existente para este servicio y paciente con fecha_final null
         const ongoingService = registros.find(
           (record) =>
             record.docId === currentTab.docId &&
@@ -437,7 +431,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         nombreDoctor: currentTab.nombreDoctor,
         nombrePaciente: currentTab.nombrePaciente,
         docId: currentTab.docId,
-        servicios: serviciosPayload, // Enviar lista de servicios
+        servicios: serviciosPayload,
         abono: aplicarAbono ? abonoAjustado : null,
         metodoPagoAbono: aplicarAbono ? metodoPagoAbono : null,
         id_cuenta_abono: aplicarAbono && metodoPagoAbono === 'Transferencia' ? idCuentaAbono : null,
@@ -463,7 +457,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         }
       );
 
-      // El backend ahora devuelve una lista de registros creados/actualizados
       const newRecords = Array.isArray(response.data) ? response.data : [response.data];
       await fetchUpdatedRecords();
 
@@ -540,7 +533,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 {tabs.length > 1 && (
                   <span
                     onClick={(e) => {
-                      e.stopPropagation(); // Evitar que el click en la "X" cambie la pestaña activa
+                      e.stopPropagation();
                       removeTab(index);
                     }}
                     className="ml-2 text-gray-500 hover:text-red-600 cursor-pointer"
@@ -651,7 +644,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 >
                   <option value="">Selecciona un servicio</option>
                   {servicios.map((s) => {
-                    // Buscar si hay un servicio en curso para este servicio y paciente
                     const ongoingService = registros.find(
                       (record) =>
                         record.docId === tabs[activeTab].docId &&
@@ -732,7 +724,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                         <input
                           type="number"
                           min="0"
-                          step="1000"
                           value={abonoInput}
                           onChange={(e) => setAbonoInput(e.target.value)}
                           className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -794,7 +785,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     <input
                       type="number"
                       min="0"
-                      step={esPorcentaje ? '0.1' : '1000'}
+                      step={esPorcentaje ? '0.1' : undefined}
                       value={descuentoInput}
                       onChange={(e) => setDescuentoInput(e.target.value)}
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -828,7 +819,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     <input
                       type="number"
                       min="0"
-                      step="1000"
                       value={valorPagado}
                       onChange={(e) => setValorPagado(e.target.value)}
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -861,7 +851,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                       <input
                         type="number"
                         min="0"
-                        step="1000"
                         value={montoPrestado}
                         onChange={(e) => setMontoPrestado(e.target.value)}
                         className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -947,14 +936,17 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Descuento
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                  Método de Pago
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                  Saldo a Favor Usado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Valor Total
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Valor Restante
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+                  Método de Pago
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Fecha Inicio
@@ -997,13 +989,16 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                     {formatCOP(registro.descuento ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado ?? 0)})` : 'N/A'}
+                    {formatCOP(registro.saldoAFavorUsado ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCOP(registro.valor_total ?? 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCOP(registro.valor_liquidado ?? 0)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado ?? 0)})` : 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {registro.fecha}

@@ -30,6 +30,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const id_sede = localStorage.getItem('selectedSede');
 
   useEffect(() => {
+    console.log('Verificando id_sede:', id_sede);
     if (!id_sede) {
       console.log('No se encontró id_sede, redirigiendo a /sedes');
       navigate('/sedes');
@@ -52,21 +53,28 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           }),
         ]);
 
+        console.log('Doctores cargados:', doctors);
+        console.log('Asistentes cargados:', assistants);
+        console.log('Servicios cargados:', services);
+        console.log('Registros obtenidos:', records.data);
+
         setDoctores(doctors);
         setAsistentes(assistants);
         setServicios(services);
         setDoctorSeleccionado(doctors[0] || assistants[0] || '');
+
         // Filtrar registros con estado false o null
-        setRegistros(
-          records.data.filter(
-            (record: DentalRecord) => record.estado === false || record.estado === null
-          ) as DentalRecord[]
-        );
+        const filteredRecords = records.data.filter(
+          (record: DentalRecord) => record.estado === false || record.estado === null
+        ) as DentalRecord[];
+        console.log('Registros filtrados (estado false o null):', filteredRecords);
+        setRegistros(filteredRecords);
       } catch (err) {
         console.error('Error al cargar los datos:', err);
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
       } finally {
         setLoading(false);
+        console.log('Carga de datos finalizada, loading:', false);
       }
     };
 
@@ -74,11 +82,14 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   }, [setRegistros, id_sede, navigate]);
 
   useEffect(() => {
+    console.log('Cambiando esAuxiliar a:', esAuxiliar, 'reiniciando doctorSeleccionado');
     setDoctorSeleccionado('');
   }, [esAuxiliar]);
 
   const pacientesUnicos = [...new Set(registros.map((registro) => registro.nombrePaciente))].sort();
   const serviciosUnicos = [...new Set(registros.map((registro) => registro.servicio))].sort();
+  console.log('Pacientes únicos:', pacientesUnicos);
+  console.log('Servicios únicos:', serviciosUnicos);
 
   const registrosFiltrados = registros.filter((registro) => {
     const coincideDoctor = registro.nombreDoctor === doctorSeleccionado;
@@ -87,6 +98,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     const coincideServicio = servicioFiltro ? registro.servicio === servicioFiltro : true;
     return coincideDoctor && coincideFecha && coincidePaciente && coincideServicio;
   });
+  console.log('Registros filtrados por doctor, fechas y filtros:', registrosFiltrados);
 
   const registrosAgrupados: { [key: string]: DentalRecord[] } = registrosFiltrados.reduce(
     (acc, registro) => {
@@ -99,32 +111,52 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     },
     {} as { [key: string]: DentalRecord[] }
   );
+  console.log('Registros agrupados por paciente y servicio:', registrosAgrupados);
 
   const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) =>
     grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
   );
+  console.log('Servicios completados:', serviciosCompletados);
 
   const serviciosPendientes = Object.values(registrosAgrupados).filter(
     (grupo) => !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
   );
+  console.log('Servicios pendientes:', serviciosPendientes);
 
   const calcularPorcentaje = (grupo: DentalRecord[]) => {
     if (esAuxiliar) {
-      return grupo[0].esPacientePropio ? 0.20 : 0.10;
+      const porcentaje = grupo[0].esPacientePropio ? 0.20 : 0.10;
+      console.log(`Calculando porcentaje para grupo auxiliar, esPacientePropio: ${grupo[0].esPacientePropio}, porcentaje: ${porcentaje}`);
+      return porcentaje;
     }
     const idPorc = grupo[0].idPorc;
-    return idPorc === 2 ? 0.50 : 0.40;
+    const porcentaje = idPorc === 2 ? 0.50 : 0.40;
+    console.log(`Calculando porcentaje para grupo doctor, idPorc: ${idPorc}, porcentaje: ${porcentaje}`);
+    return porcentaje;
   };
 
   const calcularTotalGrupo = async (grupo: DentalRecord[]) => {
-    const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
-    let porcentaje;
+    // Obtener el precio del servicio desde la tabla Servicios
+    const servicioNombre = grupo[0].servicio;
+    const servicio = servicios.find((s) => s.nombre === servicioNombre);
+    if (!servicio) {
+      console.error(`Servicio no encontrado para nombre: ${servicioNombre}`);
+      return 0;
+    }
+    console.log(`Precio del servicio ${servicioNombre}: ${servicio.precio}`);
 
+    // Calcular el total del grupo basado en el precio del servicio y el número de sesiones completadas
+    const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null) ? grupo[0].sesiones : grupo.length;
+    const totalGrupo = servicio.precio * sesionesCompletadas;
+    console.log(`Total del grupo (${servicioNombre}, sesiones: ${sesionesCompletadas}): ${totalGrupo}`);
+
+    let porcentaje;
     if (esAuxiliar) {
       porcentaje = calcularPorcentaje(grupo);
     } else {
       const idPorc = grupo[0].idPorc;
       try {
+        console.log(`Consultando porcentaje para idPorc: ${idPorc}`);
         const { data: porcentajeData } = await axios.get(
           `${import.meta.env.VITE_API_URL}/api/porcentajes/${idPorc}`,
           {
@@ -134,23 +166,29 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           }
         );
         porcentaje = porcentajeData.porcentaje / 100;
+        console.log(`Porcentaje obtenido de API: ${porcentaje}`);
       } catch (error) {
         console.error('Error al obtener el porcentaje:', error);
         porcentaje = idPorc === 2 ? 0.50 : 0.40;
+        console.log(`Usando porcentaje por defecto: ${porcentaje}`);
       }
     }
 
     const valorLiquidado = totalGrupo * porcentaje;
+    console.log(`Valor liquidado para grupo (${servicioNombre}): ${valorLiquidado}`);
     return valorLiquidado;
   };
 
   useEffect(() => {
     const fetchTotalLiquidacion = async () => {
+      console.log('Calculando total de liquidación...');
       let total = 0;
       for (const grupo of serviciosCompletados) {
         const valorLiquidado = await calcularTotalGrupo(grupo);
+        console.log(`Valor liquidado para grupo (paciente: ${grupo[0].nombrePaciente}, servicio: ${grupo[0].servicio}): ${valorLiquidado}`);
         total += valorLiquidado;
       }
+      console.log('Total de liquidación final:', total);
       setTotalLiquidacion(total);
     };
 
@@ -159,6 +197,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
   const handleLiquidarGrupo = async (grupo: DentalRecord[]) => {
     try {
+      console.log('Liquidando grupo:', grupo);
       const totalGrupo = await calcularTotalGrupo(grupo);
       const nuevaLiquidacion = {
         doctor: doctorSeleccionado,
@@ -168,6 +207,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         totalLiquidado: totalGrupo,
         fechaLiquidacion: new Date().toISOString().split('T')[0],
       };
+      console.log('Enviando nueva liquidación:', nuevaLiquidacion);
 
       await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
@@ -179,13 +219,15 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
-      // No eliminamos los registros, solo los filtramos del estado local
+      // Filtrar los registros liquidados del estado local
       const idsServiciosLiquidados = grupo.map((registro) => registro.id);
+      console.log('IDs de servicios liquidados:', idsServiciosLiquidados);
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
       setRegistros(registrosRestantes);
       setServiciosLiquidados([...serviciosLiquidados, grupo]);
+      console.log('Servicios liquidados actualizados:', serviciosLiquidados);
     } catch (err) {
       console.error('Error al liquidar el grupo:', err);
       setError('Error al liquidar el grupo. Por favor, intenta de nuevo.');
@@ -194,6 +236,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
   const handleLiquidarTodos = async () => {
     try {
+      console.log('Liquidando todos los servicios completados...');
       setMostrarLiquidacion(true);
       setServiciosLiquidados(serviciosCompletados);
 
@@ -205,6 +248,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         totalLiquidado: totalLiquidacion,
         fechaLiquidacion: new Date().toISOString().split('T')[0],
       };
+      console.log('Enviando liquidación de todos los servicios:', nuevaLiquidacion);
 
       await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
@@ -216,32 +260,36 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       );
 
-      // No eliminamos los registros, solo los filtramos del estado local
+      // Filtrar los registros liquidados del estado local
       const idsServiciosLiquidados = serviciosCompletados.flatMap((grupo) =>
         grupo.map((registro) => registro.id)
       );
+      console.log('IDs de todos los servicios liquidados:', idsServiciosLiquidados);
       const registrosRestantes = registros.filter(
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
       setRegistros(registrosRestantes);
     } catch (err) {
-      console.error('Error al liquidar:', err);
+      console.error('Error al liquidar todos los servicios:', err);
       setError('Error al liquidar los servicios. Por favor, intenta de nuevo.');
     }
   };
 
   const handleReiniciar = () => {
+    console.log('Reiniciando liquidación...');
     setMostrarLiquidacion(false);
     setServiciosLiquidados([]);
   };
 
   const handleDescargarExcel = () => {
+    console.log('Generando archivo Excel...');
     const datosExcel = serviciosLiquidados.length > 0 ? serviciosLiquidados : serviciosCompletados;
     const datos = datosExcel.flatMap((grupo) => {
-      const totalGrupo = grupo.reduce((sum, registro) => sum + (registro.valor_total || 0), 0);
-      const sesionesCompletadas = grupo.every((registro) => registro.fechaFinal !== null)
-        ? grupo[0].sesiones
-        : grupo.length;
+      const servicioNombre = grupo[0].servicio;
+      const servicio = servicios.find((s) => s.nombre === servicioNombre);
+      const precioServicio = servicio ? servicio.precio : 0;
+      const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null) ? grupo[0].sesiones : grupo.length;
+      const totalGrupo = precioServicio * sesionesCompletadas;
       const sesionesTotales = grupo[0].sesiones || 1;
       const porcentaje = esAuxiliar
         ? grupo[0].esPacientePropio
@@ -255,6 +303,11 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         ...new Set(grupo.map((registro) => registro.metodoPago).filter((metodo) => metodo !== null)),
       ].join(', ');
 
+      console.log(`Preparando datos para Excel - Grupo (paciente: ${grupo[0].nombrePaciente}, servicio: ${servicioNombre}):`, {
+        totalGrupo,
+        totalALiquidar,
+      });
+
       return grupo.map((registro) => ({
         'Doctor/Auxiliar': registro.nombreDoctor,
         Paciente: registro.nombrePaciente,
@@ -266,7 +319,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         Descuento: registro.descuento || 0,
         'Método de Pago': registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A',
         'Total Pagado': totalGrupo,
-        'Valor Total': registro.valor_total,
+        'Valor Total': precioServicio,
         'Valor Restante': registro.valor_liquidado,
         'Tipo de Paciente': grupo[0].esPacientePropio
           ? esAuxiliar
@@ -282,17 +335,21 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       }));
     });
 
+    console.log('Datos para Excel:', datos);
     const worksheet = XLSX.utils.json_to_sheet(datos);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Liquidación');
     XLSX.writeFile(workbook, `Liquidacion_${doctorSeleccionado}_${fechaInicio}_a_${fechaFin}.xlsx`);
+    console.log('Archivo Excel generado exitosamente');
   };
 
   if (loading) {
+    console.log('Mostrando estado de carga...');
     return <div className="text-center py-6">Cargando datos...</div>;
   }
 
   if (error) {
+    console.error('Error detectado:', error);
     return <div className="text-center py-6 text-red-500">{error}</div>;
   }
 
@@ -460,10 +517,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                   const grupo = serviciosLiquidados.find((g) =>
                     g.some((r) => r.id === registro.id)
                   )!;
-                  const totalGrupo = grupo.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+                  const servicioNombre = grupo[0].servicio;
+                  const servicio = servicios.find((s) => s.nombre === servicioNombre);
+                  const precioServicio = servicio ? servicio.precio : 0;
                   const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
                     ? grupo[0].sesiones
                     : grupo.length;
+                  const totalGrupo = precioServicio * sesionesCompletadas;
                   const sesionesTotales = grupo[0].sesiones || 1;
                   const porcentaje = esAuxiliar
                     ? grupo[0].esPacientePropio
@@ -490,7 +550,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total ?? 0)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(precioServicio)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {grupo[0].esPacientePropio
@@ -546,10 +606,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                   const grupo = serviciosCompletados.find((g) =>
                     g.some((r) => r.id === registro.id)
                   )!;
-                  const totalGrupo = grupo.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+                  const servicioNombre = grupo[0].servicio;
+                  const servicio = servicios.find((s) => s.nombre === servicioNombre);
+                  const precioServicio = servicio ? servicio.precio : 0;
                   const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
                     ? grupo[0].sesiones
                     : grupo.length;
+                  const totalGrupo = precioServicio * sesionesCompletadas;
                   const sesionesTotales = grupo[0].sesiones || 1;
                   const porcentaje = esAuxiliar
                     ? grupo[0].esPacientePropio
@@ -576,7 +639,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total ?? 0)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(precioServicio)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {grupo[0].esPacientePropio
@@ -638,10 +701,13 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                   const grupo = serviciosPendientes.find((g) =>
                     g.some((r) => r.id === registro.id)
                   )!;
-                  const totalGrupo = grupo.reduce((sum, r) => sum + (r.valor_total || 0), 0);
+                  const servicioNombre = grupo[0].servicio;
+                  const servicio = servicios.find((s) => s.nombre === servicioNombre);
+                  const precioServicio = servicio ? servicio.precio : 0;
                   const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
                     ? grupo[0].sesiones
                     : grupo.length;
+                  const totalGrupo = precioServicio * sesionesCompletadas;
                   const sesionesTotales = grupo[0].sesiones || 1;
                   const porcentaje = esAuxiliar
                     ? grupo[0].esPacientePropio
@@ -667,7 +733,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                         {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_total ?? 0)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(precioServicio)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {grupo[0].esPacientePropio
