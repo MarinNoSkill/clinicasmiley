@@ -491,7 +491,21 @@
     
         // Recargar la base de la caja si el pago o abono fue en efectivo
         if (payload.metodoPago === 'Efectivo' || payload.metodoPagoAbono === 'Efectivo') {
-          await loadCajaBase();
+          let newBaseEfectivo = baseEfectivo;
+          if (payload.metodoPago === 'Efectivo' && payload.valorPagado) {
+            newBaseEfectivo += payload.valorPagado;
+          }
+          if (payload.metodoPagoAbono === 'Efectivo' && payload.abono) {
+            newBaseEfectivo += payload.abono;
+          }
+          try {
+            const updatedBase = await updateCajaBase(id_sede, newBaseEfectivo);
+            setBaseEfectivo(updatedBase);
+            setBaseInput(updatedBase.toString());
+          } catch (err) {
+            console.error('Error al actualizar la base de efectivo:', err);
+            setErrorBase('Error al actualizar la base de efectivo.');
+          }
         }
     
         setSelectedRecords([]);
@@ -943,20 +957,20 @@
               </div>
             )}
             {/* --- SECCIÓN BASE EFECTIVO MODIFICADA --- */}
-            <div className="col-span-1 md:col-span-2 lg:col-span-1"> {/* Ajusta col-span según necesites */}
+            <div className="col-span-1 md:col-span-2 lg:col-span-1"> 
               <label className="block text-sm font-medium text-gray-700 mb-1">Base Efectivo Actual</label>
                 <div className="flex items-center space-x-2">
                   <input
                     type="number"
                     min="0"
-                    step="any" // Permite decimales si tu 'base' es NUMERIC
-                    value={baseInput} // El input ahora usa 'baseInput'
-                    onChange={(e) => isAdminOrOwner && setBaseInput(e.target.value)} // Solo el admin puede cambiar el input
+                    step="any"
+                    value={baseInput}
+                    onChange={(e) => isAdminOrOwner && setBaseInput(e.target.value)}
                     className={`w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
                       !isAdminOrOwner ? 'bg-gray-100 cursor-not-allowed' : ''
                       }`}
-                    disabled={!isAdminOrOwner || loadingBase} // Deshabilitado para no admins o mientras carga/actualiza
-                    readOnly={!isAdminOrOwner} // Otra forma de prevenir edición
+                    disabled={!isAdminOrOwner || loadingBase} 
+                    readOnly={!isAdminOrOwner}
                     placeholder={loadingBase ? 'Cargando...' : ''}
                   />
                   {isAdminOrOwner && (
