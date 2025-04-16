@@ -63,10 +63,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         setServicios(services);
         setDoctorSeleccionado(doctors[0] || assistants[0] || '');
 
-        // Filtrar registros con estado false o null
-        const filteredRecords = records.data.filter(
-          (record: DentalRecord) => record.estado === false || record.estado === null
-        ) as DentalRecord[];
+        const filteredRecords = (records.data as DentalRecord[]).filter(
+          (record) => record.estado === false || record.estado === null
+        );
         console.log('Registros filtrados (estado false o null):', filteredRecords);
         setRegistros(filteredRecords);
       } catch (err) {
@@ -113,15 +112,39 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   );
   console.log('Registros agrupados por paciente y servicio:', registrosAgrupados);
 
-  const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) =>
+  /*const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) =>
     grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
   );
-  console.log('Servicios completados:', serviciosCompletados);
-
+  console.log('Servicios completados:', serviciosCompletados); 
   const serviciosPendientes = Object.values(registrosAgrupados).filter(
     (grupo) => !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
   );
-  console.log('Servicios pendientes:', serviciosPendientes);
+  console.log('Servicios pendientes:', serviciosPendientes); Codigo anterior*/
+
+  const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) => {
+    if (!grupo || grupo.length === 0) return false;
+
+    const primerRegistro = grupo[0];
+    const sesionesTotales = primerRegistro.sesiones || 1; 
+
+    const tieneFechaFinal = grupo.every(registro => registro.fechaFinal !== null);
+    if (tieneFechaFinal) {
+        const valorLiquidadoTotalGrupo = grupo.reduce((sum, r) => sum + (r.valor_liquidado ?? 0), 0);
+        return valorLiquidadoTotalGrupo <= 0;
+    }
+
+
+    if (sesionesTotales > 1 && !tieneFechaFinal) {
+        const valorLiquidadoTotalGrupo = grupo.reduce((sum, r) => sum + (r.valor_liquidado ?? 0), 0);
+        return valorLiquidadoTotalGrupo <= 0;
+    }
+
+    return false;
+  });
+  console.log('Servicios completados (lógica actualizada):', serviciosCompletados);
+
+  const serviciosPendientes = Object.values(registrosAgrupados).filter(grupo => !serviciosCompletados.includes(grupo));
+  console.log('Servicios pendientes (lógica actualizada):', serviciosPendientes);
 
   const calcularPorcentaje = (grupo: DentalRecord[]) => {
     if (esAuxiliar) {
@@ -165,7 +188,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
             },
           }
         );
-        porcentaje = porcentajeData.porcentaje / 100;
+        const typedPorcentajeData = porcentajeData as { porcentaje: number };
+        porcentaje = typedPorcentajeData.porcentaje / 100;
         console.log(`Porcentaje obtenido de API: ${porcentaje}`);
       } catch (error) {
         console.error('Error al obtener el porcentaje:', error);

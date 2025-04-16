@@ -64,6 +64,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   >([]);
   const [mostrarListaPacientes, setMostrarListaPacientes] = useState<boolean>(false);
   const [saldoAFavor, setSaldoAFavor] = useState<number>(0);
+  const [baseEfectivo, setBaseEfectivo] = useState<number>(0);
 
   const MAX_SERVICES = 5;
   const MAX_TABS = 7;
@@ -459,6 +460,16 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
       const newRecords = Array.isArray(response.data) ? response.data : [response.data];
       await fetchUpdatedRecords();
+
+      // Actualizar baseEfectivo si el método de pago principal es "Efectivo"
+      if (currentTab.metodoPago === 'Efectivo') {
+        setBaseEfectivo((prevBase) => prevBase + parseFloat(valorPagado));
+      }
+
+      // Actualizar baseEfectivo si el abono es en "Efectivo"
+      if (aplicarAbono && metodoPagoAbono === 'Efectivo') {
+        setBaseEfectivo((prevBase) => prevBase + parseFloat(abonoInput));
+      }
 
       setSelectedRecords([]);
       resetForm();
@@ -872,7 +883,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               </>
             )}
           </div>
-
           {!esAuxiliar && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">¿Paciente Propio?</label>
@@ -884,6 +894,19 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               />
             </div>
           )}
+          <div>
+            <label className="flex text-sm font-medium text-gray-700 mb-2">Base Efectivo</label>
+            <input 
+              type="number"
+              min="0"
+              value={baseEfectivo}
+              onChange={(e) => isAdminOrOwner && setBaseEfectivo(parseFloat(e.target.value) || 0)}
+              className={`w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
+                isAdminOrOwner ? '' : 'bg-gray-100 cursor-not-allowed'
+              }`}
+              disabled={!isAdminOrOwner}
+            />
+          </div>
         </div>
 
         <div className="mt-6">

@@ -106,7 +106,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                 }`
               }
             >
-              Registros Diarios
+              Registros
             </NavLink>
             {isAdminOrOwner && (
               <>
@@ -128,7 +128,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                     }`
                   }
                 >
-                  Estandarización de Servicios
+                  Servicios
                 </NavLink>
                 <NavLink
                   to="/historial"
@@ -138,12 +138,12 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                     }`
                   }
                 >
-                  Historial de Liquidaciones
+                  Historial
                 </NavLink>
               </>
             )}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-700">
+            <div className="flex items-center space-x-2 px-1 pt-1">
+              <span className="text-sm font-medium text-gray-700 ">
                 Sede: {sedeActual}
               </span>
               <button
@@ -176,7 +176,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
               }
               onClick={() => setIsMenuOpen(false)}
             >
-              Registros Diarios
+              Registros
             </NavLink>
             {isAdminOrOwner && (
               <>
@@ -200,7 +200,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                   }
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Estandarización de Servicios
+                  Servicios
                 </NavLink>
                 <NavLink
                   to="/historial"
@@ -211,17 +211,17 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                   }
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Historial de Liquidaciones
+                  Historial
                 </NavLink>
               </>
             )}
-            <div className="px-3 py-2 flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-700">
+            <div className="px-3 py-2 flex items-center space-x-2 ">
+              <span className="text-base font-medium text-gray-700">
                 Sede: {sedeActual}
               </span>
               <button
                 onClick={handleChangeSede}
-                className="text-sm font-medium text-blue-500 hover:text-blue-700"
+                className="text-base font-medium text-blue-500 hover:text-blue-700"
               >
                 Cambiar
               </button>
