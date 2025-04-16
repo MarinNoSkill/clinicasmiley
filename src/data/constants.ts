@@ -62,3 +62,29 @@ export const fetchAccounts = async (id_sede: string): Promise<{ id_cuenta: numbe
   });
   return response.data;
 };
+
+export const fetchCajaBase = async (id_sede: string): Promise<number> => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await axios.get<{ base: number }>(`${import.meta.env.VITE_API_URL}/api/caja/${id_sede}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data.base;
+  } catch (error) {
+    console.error("Error fetching caja base:", error);
+    // Considera cómo manejar el error en la UI, quizás devolver 0 o lanzar el error
+    return 0;
+  }
+};
+
+export const updateCajaBase = async (id_sede: string, base: number): Promise<number> => {
+  const token = localStorage.getItem('token');
+  const response = await axios.put<{ base: number }>(
+    `${import.meta.env.VITE_API_URL}/api/caja/${id_sede}`,
+    { base }, // Enviar el nuevo valor de la base en el cuerpo
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  return response.data.base; // Devuelve la base actualizada desde el backend
+};
