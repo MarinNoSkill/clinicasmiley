@@ -36,7 +36,6 @@ axios.interceptors.response.use(
   }
 );
 
-
 const ProtectedRoute: React.FC<{ children: JSX.Element; adminOnly?: boolean }> = ({ children, adminOnly = false }) => {
   const token = localStorage.getItem('token');
   const selectedSede = localStorage.getItem('selectedSede');
@@ -45,7 +44,6 @@ const ProtectedRoute: React.FC<{ children: JSX.Element; adminOnly?: boolean }> =
   if (!token) return <Navigate to="/login" />;
   if (!selectedSede) return <Navigate to="/sedes" />;
   
-  // Si la ruta es solo para Dueño/Admin, verificamos el nombre del usuario
   if (adminOnly && user && !['Dueño', 'Admin'].includes(user.usuario)) {
     return <Navigate to="/" />;
   }
@@ -135,7 +133,7 @@ function App() {
           <Route
             path="/gastos"
             element={
-              <ProtectedRoute adminOnly={true}>
+              <ProtectedRoute>
                 <>
                   <Navbar onLogout={handleLogout} />
                   <RegistroGasto />
@@ -144,15 +142,18 @@ function App() {
             }
           />
           <Route
-             path="*"
-             element={
-                <Navigate to={
+            path="*"
+            element={
+              <Navigate
+                to={
                   localStorage.getItem('token')
-                  ? (localStorage.getItem('selectedSede') ? '/' : '/sedes')
-                  : '/login' 
-                } replace />
-             }
-            />
+                    ? (localStorage.getItem('selectedSede') ? '/' : '/sedes')
+                    : '/login'
+                }
+                replace
+              />
+            }
+          />
         </Routes>
       </div>
     </Router>
