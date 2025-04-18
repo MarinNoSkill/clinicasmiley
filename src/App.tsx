@@ -9,6 +9,7 @@ import HistorialLiquidaciones from './components/HistorialLiquidaciones';
 import Login from './components/Login';
 import Sedes from './components/Sedes';
 import { DentalRecord } from './types';
+import RegistroGasto from './components/RegistroGasto';
 
 axios.interceptors.response.use(
   (response) => response,
@@ -131,7 +132,27 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/sedes" />} />
+          <Route
+            path="/gastos"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <>
+                  <Navbar onLogout={handleLogout} />
+                  <RegistroGasto />
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+             path="*"
+             element={
+                <Navigate to={
+                  localStorage.getItem('token')
+                  ? (localStorage.getItem('selectedSede') ? '/' : '/sedes')
+                  : '/login' 
+                } replace />
+             }
+            />
         </Routes>
       </div>
     </Router>
