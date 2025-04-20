@@ -10,6 +10,7 @@ import Login from './components/Login';
 import Sedes from './components/Sedes';
 import { DentalRecord } from './types';
 import RegistroGasto from './components/RegistroGasto';
+import HistorialGastos from './components/HistorialGastos';
 
 axios.interceptors.response.use(
   (response) => response,
@@ -137,6 +138,17 @@ function App() {
                 <>
                   <Navbar onLogout={handleLogout} />
                   <RegistroGasto />
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/HistorialGastos"
+            element={
+              <ProtectedRoute>
+                <>
+                  <Navbar onLogout={handleLogout} />
+                  <HistorialGastos />
                 </>
               </ProtectedRoute>
             }
