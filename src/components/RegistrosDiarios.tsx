@@ -69,6 +69,12 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [errorBase, setErrorBase] = useState<string>('');
   const [baseInput, setBaseInput] = useState<string>('0');
 
+  const serviciosAuxiliarPermitidos = [
+  'Sesión de aclaramiento',
+  'Limpieza profunda',
+  'Promoción aclaramiento',
+];
+
   const MAX_SERVICES = 5;
   const MAX_TABS = 7;
 
@@ -156,6 +162,14 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
   useEffect(() => {
     updateTab(activeTab, (prev) => ({ ...prev, nombreDoctor: '' }));
+    if (esAuxiliar) {
+      updateTab(activeTab, (prev) => ({
+        ...prev,
+        servicio: prev.servicio.map((s) =>
+          serviciosAuxiliarPermitidos.includes(s) ? s : ''
+        ),
+      }));
+    }
   }, [esAuxiliar]);
 
   useEffect(() => {
@@ -384,12 +398,12 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     if (aplicarAbono) {
       abonoAjustado = parseNumberInput(abonoInput);
       if (esDatáfonoAbono) {
-        abonoAjustado *= 1.05; // Ajuste del 5% para datáfono
+        abonoAjustado *= 1.05; 
       }
     }
 
     if (esDatáfono) {
-      nuevoValorServicio *= 1.05; // Ajuste del 5% para datáfono
+      nuevoValorServicio *= 1.05;
     }
 
     return { valorTotal, descuentoFinal, nuevoValorServicio, abonoAjustado };
@@ -731,7 +745,10 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   required
                 >
                   <option value="">Selecciona un servicio</option>
-                  {servicios.map((s) => {
+                  {(esAuxiliar
+                    ? servicios.filter((s) => serviciosAuxiliarPermitidos.includes(s.nombre))
+                    : servicios
+                  ).map((s) => {
                     const ongoingService = registros.find(
                       (record) =>
                         record.docId === tabs[activeTab].docId &&
