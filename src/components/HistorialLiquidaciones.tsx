@@ -172,7 +172,7 @@ const HistorialLiquidaciones: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Historial de Liquidaciones - Clínica Smiley</h2>
 
-      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
+      <div className="bg-white shadow-md rounded-lg p-5 mb-6 border border-teal-200">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Filtros</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
@@ -254,7 +254,7 @@ const HistorialLiquidaciones: React.FC = () => {
               </div>
               <button
                 onClick={() => handleDescargarExcel(liquidacion)}
-                className="px-4 py-2 rounded-md text-white font-medium bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                className="px-4 py-2 rounded-md text-white font-medium bg-gradient-to-r from-teal-600 to-teal-700 hover:bg-teal-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
               >
                 Descargar en Excel
               </button>

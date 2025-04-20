@@ -381,7 +381,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Liquidación - Clínica Smiley</h2>
 
-      <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
+      <div className="bg-white shadow-md rounded-lg p-5 mb-6 border border-teal-200">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">¿Es auxiliar?</label>
@@ -502,7 +502,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           {(serviciosCompletados.length > 0 || serviciosLiquidados.length > 0) && (
             <button
               onClick={handleDescargarExcel}
-              className="px-6 py-2 rounded-md text-white font-medium bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+              className="px-6 py-2 rounded-md text-white font-medium bg-gradient-to-r from-teal-600 to-teal-700 hover:bg-teal-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
             >
               Descargar en Excel
             </button>

@@ -77,23 +77,20 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario);
 
-  // Función para formatear números con separadores de miles
   const formatNumberInput = (value: string): string => {
     if (!value || value === '0') return '0';
-    const cleanValue = value.replace(/[^0-9]/g, ''); // Solo números
+    const cleanValue = value.replace(/[^0-9]/g, '');
     const numberValue = parseInt(cleanValue, 10);
     if (isNaN(numberValue)) return '0';
     return numberValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
-  // Función para desformatear el valor al enviarlo o calcular
   const parseNumberInput = (value: string): number => {
     return parseFloat(value.replace(/\./g, '')) || 0;
   };
 
-  // Manejador para evitar que la rueda del mouse cambie el valor
   const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
-    e.currentTarget.blur(); // Quita el foco para evitar cambios
+    e.currentTarget.blur();
   };
 
   const loadCajaBase = useCallback(async () => {
@@ -606,7 +603,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       </div>
 
       <div className="mb-4">
-        <div className="flex items-center space-x-1 border-b border-gray-200">
+        <div className="flex items-center space-x-1 border-b border-gray-200 ">
           {tabs.map((_, index) => (
             <div key={index} className="relative flex items-center">
               <button
@@ -649,7 +646,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6 mb-8">
+      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-5 mb-6 border border-teal-200">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">¿Es auxiliar?</label>
@@ -1027,7 +1024,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               </p>
             )}
             {!isAdminOrOwner && (
-              <p className="text-xs text-gray-500 mt-1">Solo Admin/Dueño puede modificar.</p>
+              <p className="text-xs text-gray-500 mt-1">Solo Admin puede modificar.</p>
             )}
             <p className="text-xs text-gray-500 mt-1">Se actualiza automáticamente con pagos/abonos en efectivo.</p>
           </div>
@@ -1036,7 +1033,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         <div className="mt-6">
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="bg-gradient-to-r from-teal-600 to-teal-700 text-white px-4 py-2 rounded-md hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             Guardar Registro
           </button>

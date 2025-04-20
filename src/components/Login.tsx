@@ -70,7 +70,7 @@ const Login: React.FC = () => {
             type="submit"
             disabled={loading}
             className={`w-full py-2 rounded-md text-white font-medium ${
-              loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              loading ? 'bg-gradient-to-r from-teal-600 to-teal-700 cursor-not-allowed' : 'bg-gradient-to-r from-teal-600 to-teal-700 hover:bg-teal-900'
             } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200`}
           >
             {loading ? 'Cargando...' : 'Iniciar Sesión'}

@@ -162,7 +162,7 @@ const RegistroGasto: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto px-4 py-8">
-      <h2 className="text-xl font-medium text-gray-800 tracking-tight mb-6 text-center">
+      <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">
         Registrar Gasto Diario - Clínica Smiley
       </h2>
       <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6 border border-teal-200">

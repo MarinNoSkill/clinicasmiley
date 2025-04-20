@@ -16,6 +16,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   const [sedeActual, setSedeActual] = useState<string>('Cargando...');
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
   const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario);
 
   useEffect(() => {
@@ -56,15 +57,21 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
     onLogout();
     navigate('/sedes');
     setIsMenuOpen(false);
+    setIsProfileMenuOpen(false);
   };
 
   const handleChangeSede = () => {
     navigate('/sedes');
     setIsMenuOpen(false);
+    setIsProfileMenuOpen(false);
   };
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  const toggleProfileMenu = () => {
+    setIsProfileMenuOpen(!isProfileMenuOpen);
   };
 
   return (
@@ -138,48 +145,72 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                     }`
                   }
                 >
-                  Historial
+                  Historial Liquidación
                 </NavLink>
               </>
             )}
             <NavLink
-                  to="/gastos"
-                  className={({ isActive }) =>
-                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                      isActive ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    }`
-                  }
-                >
-                  Gastos
+              to="/gastos"
+              className={({ isActive }) =>
+                `inline-flex items-center px-1 pt-1 text-sm font-medium ${
+                  isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                }`
+              }
+            >
+              Gastos
             </NavLink>
             <NavLink
-                  to="/HistorialGastos"
-                  className={({ isActive }) =>
-                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                      isActive ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    }`
-                  }
-                >
-                  Historial gastos
+              to="/HistorialGastos"
+              className={({ isActive }) =>
+                `inline-flex items-center px-1 pt-1 text-sm font-medium ${
+                  isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                }`
+              }
+            >
+              Historial Gastos
             </NavLink>
-            <div className="flex items-center space-x-2 px-1 pt-1">
-              <span className="text-sm font-medium text-gray-700 ">
-                Sede: {sedeActual}
-              </span>
-              <button
-                onClick={handleChangeSede}
-                className="text-sm font-medium text-blue-500 hover:text-blue-700"
-              >
-                Cambiar
-              </button>
-            </div>
+            {/* Menú desplegable en desktop */}
             {user && (
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-1 pt-1 text-sm font-medium text-red-500 hover:text-red-700"
-              >
-                Cerrar Sesión
-              </button>
+              <div className="relative">
+                <button
+                  onClick={toggleProfileMenu}
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none"
+                >
+                  {user.nombre || 'Usuario'}
+                  <svg
+                    className="ml-2 h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                    <div className="px-4 py-2 text-sm text-gray-700 flex items-center justify-between">
+                      <span>Sede: {sedeActual}</span>
+                      <button
+                        onClick={handleChangeSede}
+                        className="text-blue-500 hover:text-blue-700"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-500 hover:text-red-700 hover:bg-gray-50"
+                    >
+                      Cerrar Sesión
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -231,23 +262,33 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                   }
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Historial
+                  Historial Liquidación
                 </NavLink>
-                
               </>
             )}
             <NavLink
-                    to="/gastos" 
-                    className={({ isActive }) =>
-                     `block px-3 py-2 rounded-md text-base font-medium ${
-                       isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                     }`
-                    }
-                    onClick={() => setIsMenuOpen(false)}
-                 >
-                    Gastos 
+              to="/gastos"
+              className={({ isActive }) =>
+                `block px-3 py-2 rounded-md text-base font-medium ${
+                  isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                }`
+              }
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Gastos
             </NavLink>
-            <div className="px-3 py-2 flex items-center space-x-2 ">
+            <NavLink
+              to="/HistorialGastos"
+              className={({ isActive }) =>
+                `block px-3 py-2 rounded-md text-base font-medium ${
+                  isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                }`
+              }
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Historial Gastos
+            </NavLink>
+            <div className="px-3 py-2 flex items-center space-x-2">
               <span className="text-base font-medium text-gray-700">
                 Sede: {sedeActual}
               </span>

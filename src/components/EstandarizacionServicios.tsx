@@ -280,7 +280,7 @@ const EstandarizacionServicios: React.FC = () => {
         </div>
         <button
           onClick={handleAddService}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="mt-4 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-md hover:bg-teal-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           Añadir Servicio
         </button>
