@@ -627,7 +627,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 }}
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 ${
                   activeTab === index
-                    ? 'bg-white text-blue-600 border border-b-0 border-gray-200'
+                    ? 'bg-white text-teal-700 border border-b-0 border-gray-200'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -644,7 +644,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   </span>
                 )}
                 {activeTab === index && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-600"></span>
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-teal-600 to-teal-700"></span>
                 )}
               </button>
             </div>
@@ -652,7 +652,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           {tabs.length < MAX_TABS && (
             <button
               onClick={addTab}
-              className="flex items-center justify-center px-2 py-1 text-sm font-medium text-white bg-blue-600 rounded-t-lg hover:bg-blue-700 transition-all duration-200"
+              className="flex items-center justify-center px-2 py-1 text-sm font-medium text-white bg-gradient-to-r from-teal-600 to-teal-700 rounded-t-lg hover:bg-blue-700 transition-all duration-200"
             >
               +
             </button>
