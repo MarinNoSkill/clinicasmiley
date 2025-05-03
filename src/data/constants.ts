@@ -31,14 +31,14 @@ export const fetchAssistants = async (id_sede: string): Promise<string[]> => {
   return response.data as string[];
 };
 
-export const fetchServices = async (): Promise<{ nombre: string; precio: number }[]> => {
+export const fetchServices = async (): Promise<{ nombre: string; precio: number; descripcion: string; sesiones: number; }[]> => {
   const token = localStorage.getItem('token');
   const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/services`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.data as { nombre: string; precio: number }[];
+  return response.data as { nombre: string; precio: number; descripcion: string; sesiones: number; }[];
 };
 
 export const fetchPaymentMethods = async (): Promise<string[]> => {
