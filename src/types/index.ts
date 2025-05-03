@@ -1,5 +1,6 @@
 // src/types/index.ts
 export interface DentalRecord {
+  saldoAFavorUsado: number;
   id: string;
   nombreDoctor: string;
   nombrePaciente: string;
@@ -15,7 +16,7 @@ export interface DentalRecord {
   idPorc: number;
   valor_liquidado: number;
   valor_pagado: number; 
-  estado?: boolean; // Añadido para manejar el estado de liquidación
+  estado?: boolean;
   id_cuenta: number | null;
   id_cuenta_abono: number | null;
   esPacientePropio: boolean;
@@ -23,6 +24,7 @@ export interface DentalRecord {
   montoPrestado?: number | null; 
   titularCredito?: string | null; 
   esDatáfono?: boolean; 
+  notas?: string | null;
 }
 
 export interface Liquidacion {

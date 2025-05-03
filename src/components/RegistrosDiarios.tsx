@@ -18,6 +18,7 @@ interface FormData {
   descuento: number | null;
   fecha: string;
   metodoPago: string;
+  notas?: string;
 }
 
 const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegistros }) => {
@@ -41,6 +42,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       descuento: null,
       fecha: hoy,
       metodoPago: '',
+      notas: '',
     },
   ]);
   const [activeTab, setActiveTab] = useState<number>(0);
@@ -344,6 +346,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         descuento: null,
         fecha: hoy,
         metodoPago: '',
+        notas: '',
       },
     ]);
     setActiveTab(0);
@@ -504,6 +507,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         titularCredito: currentTab.metodoPago === 'Crédito' ? titularCredito : null,
         esDatáfono: esDatáfono,
         esDatáfonoAbono: aplicarAbono ? esDatáfonoAbono : null,
+        notas : currentTab.notas || null,
       };
 
       console.log('Enviando payload:', payload);
@@ -1047,6 +1051,17 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           </div>
         </div>
 
+        <div className="col-span-1 md:col-span-2 lg:col-span-3">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Notas (Opcional)</label>
+          <textarea
+            value={tabs[activeTab].notas || ''}
+            onChange={(e) => updateTab(activeTab, (prev) => ({ ...prev, notas: e.target.value }))}
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            rows={4}
+            placeholder="Ingresa cualquier novedad o comentario adicional..."
+          />
+        </div>
+
         <div className="mt-6">
           <button
             type="submit"
@@ -1112,6 +1127,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Fecha Inicio
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
+                  Notas
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                   Fecha Final
                 </th>
@@ -1163,6 +1181,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {registro.fecha}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {registro.notas || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {registro.fechaFinal || 'Pendiente'}

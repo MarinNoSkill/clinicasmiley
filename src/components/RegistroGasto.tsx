@@ -23,6 +23,7 @@ const conceptosData = [
   { concepto: "Domicilios", proveedor: "Didi / Picap", tipo: "Eventual" },
   { concepto: "Productos de aseo", proveedor: "D1", tipo: "Aseo general" },
   { concepto: "Servicio técnico", proveedor: "Wilson", tipo: "Eventual" },
+  { concepto: "Otro", proveedor: "", tipo: "" },
 ];
 
 const RegistroGasto: React.FC = () => {
@@ -39,6 +40,7 @@ const RegistroGasto: React.FC = () => {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string>("");
+  const [isCustomConcept, setIsCustomConcept] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchResponsables = async () => {
@@ -81,11 +83,14 @@ const RegistroGasto: React.FC = () => {
 
   const handleConceptoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const conceptoSeleccionado = conceptosData.find((c) => c.concepto === e.target.value);
+    const isOtherSelected = e.target.value === "Otro";
+
+    setIsCustomConcept(isOtherSelected);
     setGasto({
       ...gasto,
       concepto: e.target.value,
-      proveedor: conceptoSeleccionado?.proveedor || "",
-      tipoGasto: conceptoSeleccionado?.tipo || "",
+      proveedor: isOtherSelected ? "" : (conceptoSeleccionado?.proveedor || ""),
+      tipoGasto: isOtherSelected ? "" : (conceptoSeleccionado?.tipo || ""),
     });
   };
 
@@ -152,6 +157,7 @@ const RegistroGasto: React.FC = () => {
         responsable: "",
         comentario: "",
       });
+      setIsCustomConcept(false);
     } catch (err: any) {
       console.error("Error registrando gasto:", err);
       setError(err.response?.data?.error || err.message || "Error al registrar el gasto.");
@@ -207,6 +213,21 @@ const RegistroGasto: React.FC = () => {
           </select>
         </div>
 
+        {isCustomConcept && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-600">Concepto Personalizado</label>
+            <input
+              type="text"
+              name="concepto"
+              value={gasto.concepto === "Otro" ? "" : gasto.concepto}
+              onChange={handleChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm p-1.5"
+              placeholder="Ingrese el concepto personalizado"
+              required
+            />
+          </div>
+        )}
+
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-600">Proveedor</label>
           <input
@@ -214,8 +235,8 @@ const RegistroGasto: React.FC = () => {
             name="proveedor"
             value={gasto.proveedor}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 bg-teal-50 text-sm p-1.5"
-            readOnly
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm p-1.5"
+            readOnly={!isCustomConcept}
             required
           />
         </div>
@@ -227,8 +248,8 @@ const RegistroGasto: React.FC = () => {
             name="tipoGasto"
             value={gasto.tipoGasto}
             onChange={handleChange}
-            className="mt-1 block w-full rounded-md border-gray-300 bg-teal-50 text-sm p-1.5"
-            readOnly
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm p-1.5"
+            readOnly={!isCustomConcept}
             required
           />
         </div>
@@ -248,7 +269,9 @@ const RegistroGasto: React.FC = () => {
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-600">Responsable</label>
+          <label
+
+ className="block text-sm font-medium text-gray-600">Responsable</label>
           <select
             name="responsable"
             value={gasto.responsable}
