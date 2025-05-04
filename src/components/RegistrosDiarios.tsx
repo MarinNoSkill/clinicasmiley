@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { DentalRecord } from '../types';
-import { formatCOP, fetchDoctors, fetchAssistants, fetchServices, fetchPaymentMethods, fetchAccounts, fetchCajaBase, updateCajaBase } from '../data/constants';
+import { formatCOP, fetchDoctors, fetchAssistants, fetchServices, fetchStadiumServices, fetchPaymentMethods, fetchAccounts, fetchCajaBase, updateCajaBase } from '../data/constants';
 import { useNavigate } from 'react-router-dom';
 
 interface RegistrosDiariosProps {
@@ -32,6 +32,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [usarPreciosEstadio, setUsarPreciosEstadio] = useState<boolean>(true);
   const [tabs, setTabs] = useState<FormData[]>([
     {
       nombreDoctor: '',
@@ -133,10 +134,17 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     const loadData = async () => {
       try {
         setLoading(true);
-        const [doctors, assistants, services, paymentMethods, records, accounts] = await Promise.all([
+        
+        let servicesData;
+        if (id_sede === '2') {
+          servicesData = usarPreciosEstadio ? await fetchStadiumServices() : await fetchServices();
+        } else {
+          servicesData = await fetchServices();
+        }
+        
+        const [doctors, assistants, paymentMethods, records, accounts] = await Promise.all([
           fetchDoctors(id_sede),
           fetchAssistants(id_sede),
-          fetchServices(),
           fetchPaymentMethods(),
           axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
             params: { id_sede },
@@ -147,7 +155,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
         setDoctores(doctors);
         setAsistentes(assistants);
-        setServicios(services);
+        setServicios(servicesData);
         setMetodosPago(paymentMethods);
         setRegistros(records.data as DentalRecord[]);
         setCuentas(accounts);
@@ -160,7 +168,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     };
 
     loadData();
-  }, [setRegistros, id_sede, navigate]);
+  }, [setRegistros, id_sede, navigate, usarPreciosEstadio]);
 
   useEffect(() => {
     updateTab(activeTab, (prev) => ({ ...prev, nombreDoctor: '' }));
@@ -619,6 +627,38 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           />
         </div>
       </div>
+
+      {id_sede === '2' && (
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="text-lg font-medium text-blue-800 mb-2">Precios Sede Estadio</h3>
+          <div className="flex items-center">
+            <div className="flex items-center mr-4">
+              <input
+                id="precios-estadio"
+                type="radio"
+                checked={usarPreciosEstadio}
+                onChange={() => setUsarPreciosEstadio(true)}
+                className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="precios-estadio" className="ml-2 text-sm font-medium text-gray-700">
+                Usar precios de Estadio
+              </label>
+            </div>
+            <div className="flex items-center">
+              <input
+                id="precios-estandar"
+                type="radio"
+                checked={!usarPreciosEstadio}
+                onChange={() => setUsarPreciosEstadio(false)}
+                className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="precios-estandar" className="ml-2 text-sm font-medium text-gray-700">
+                Usar precios estándar de la clínica
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-4">
         <div className="flex items-center space-x-1 border-b border-gray-200 ">

@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import RegistrosDiarios from './components/RegistrosDiarios';
 import Liquidacion from './components/Liquidacion';
 import EstandarizacionServicios from './components/EstandarizacionServicios';
+import ServiciosEstadio from './components/ServiciosEstadio';
 import HistorialLiquidaciones from './components/HistorialLiquidaciones';
 import Login from './components/Login';
 import Sedes from './components/Sedes';
@@ -149,6 +150,17 @@ function App() {
                 <>
                   <Navbar onLogout={handleLogout} />
                   <HistorialGastos />
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/servicios-estadio"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <>
+                  <Navbar onLogout={handleLogout} />
+                  <ServiciosEstadio />
                 </>
               </ProtectedRoute>
             }

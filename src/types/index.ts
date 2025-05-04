@@ -1,4 +1,3 @@
-// src/types/index.ts
 export interface DentalRecord {
   saldoAFavorUsado: number;
   id: string;

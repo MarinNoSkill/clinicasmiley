@@ -51,7 +51,6 @@ export const fetchPaymentMethods = async (): Promise<string[]> => {
   return response.data as string[];
 };
 
-// Nueva función para obtener las cuentas bancarias
 export const fetchAccounts = async (id_sede: string): Promise<{ id_cuenta: number; cuentas: string }[]> => {
   const token = localStorage.getItem('token');
   const response = await axios.get<{ id_cuenta: number; cuentas: string }[]>(`${import.meta.env.VITE_API_URL}/api/accounts`, {
@@ -72,7 +71,6 @@ export const fetchCajaBase = async (id_sede: string): Promise<number> => {
     return response.data.base;
   } catch (error) {
     console.error("Error fetching caja base:", error);
-    // Considera cómo manejar el error en la UI, quizás devolver 0 o lanzar el error
     return 0;
   }
 };
@@ -81,10 +79,20 @@ export const updateCajaBase = async (id_sede: string, base: number): Promise<num
   const token = localStorage.getItem('token');
   const response = await axios.put<{ base: number }>(
     `${import.meta.env.VITE_API_URL}/api/caja/${id_sede}`,
-    { base }, // Enviar el nuevo valor de la base en el cuerpo
+    { base },
     {
       headers: { Authorization: `Bearer ${token}` },
     }
   );
-  return response.data.base; // Devuelve la base actualizada desde el backend
+  return response.data.base; 
+};
+
+export const fetchStadiumServices = async (): Promise<{ nombre: string; precio: number; descripcion: string; sesiones: number; }[]> => {
+  const token = localStorage.getItem('token');
+  const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/stadium-services`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.data as { nombre: string; precio: number; descripcion: string; sesiones: number; }[];
 };

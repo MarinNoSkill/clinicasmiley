@@ -15,6 +15,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   const [sedeActual, setSedeActual] = useState<string>('Cargando...');
+  const [isEstadioSede, setIsEstadioSede] = useState<boolean>(false);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
   const isAdminOrOwner = user && ['Dueño', 'Admin'].includes(user.usuario);
@@ -38,12 +39,15 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
         const sede = response.data.find((s) => s.id_sede === parseInt(id_sede, 10));
         if (sede) {
           setSedeActual(sede.sede);
+          setIsEstadioSede(sede.sede === 'Estadio');
         } else {
           setSedeActual('Desconocida');
+          setIsEstadioSede(false);
         }
       } catch (err) {
         console.error('Error al obtener la sede actual:', err);
         setSedeActual('Error');
+        setIsEstadioSede(false);
       }
     };
 
@@ -137,6 +141,18 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                 >
                   Servicios
                 </NavLink>
+                {isEstadioSede && (
+                  <NavLink
+                    to="/servicios-estadio"
+                    className={({ isActive }) =>
+                      `inline-flex items-center px-1 pt-1 text-sm font-medium ${
+                        isActive ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'
+                      }`
+                    }
+                  >
+                    Servicios Estadio
+                  </NavLink>
+                )}
                 <NavLink
                   to="/historial"
                   className={({ isActive }) =>
@@ -253,6 +269,19 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                 >
                   Servicios
                 </NavLink>
+                {isEstadioSede && (
+                  <NavLink
+                    to="/servicios-estadio"
+                    className={({ isActive }) =>
+                      `block px-3 py-2 rounded-md text-base font-medium ${
+                        isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                      }`
+                    }
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Servicios Estadio
+                  </NavLink>
+                )}
                 <NavLink
                   to="/historial"
                   className={({ isActive }) =>
