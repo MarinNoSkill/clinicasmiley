@@ -820,7 +820,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   <option value="">Selecciona un método de pago</option>
                   {metodosPago.map((metodo) => (
                     <option key={metodo} value={metodo}>
-                      {metodo}
+                      {metodo === 'Datáfono' ? 'Datáfono (Tarjeta crédito / Tarjeta débito)' : 
+                       metodo === 'Crédito' ? 'Crédito (DataCredito, SisteCredito, Addi)' : 
+                       metodo}
                     </option>
                   ))}
                 </select>
@@ -865,6 +867,34 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                           ))}
                         </select>
                       </div>
+                    )}
+                    {metodoPagoAbono === 'Crédito' && (
+                      <>
+                        <div className="mt-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Monto Prestado (Abono) (COP)</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={formatNumberInput(montoPrestado)}
+                              onChange={(e) => setMontoPrestado(e.target.value.replace(/[^0-9]/g, ''))}
+                              onWheel={handleWheel}
+                              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 pr-8"
+                              required
+                            />
+                            <span className="absolute inset-y-0 right-2 flex items-center text-gray-500">$</span>
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Titular del Crédito (Abono)</label>
+                          <input
+                            type="text"
+                            value={titularCredito}
+                            onChange={(e) => setTitularCredito(e.target.value)}
+                            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            required
+                          />
+                        </div>
+                      </>
                     )}
                   </>
                 )}
@@ -923,7 +953,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               <option value="">Selecciona un método de pago</option>
               {metodosPago.map((metodo) => (
                 <option key={metodo} value={metodo}>
-                  {metodo}
+                  {metodo === 'Datáfono' ? 'Datáfono (Tarjeta crédito / Tarjeta débito)' : 
+                   metodo === 'Crédito' ? 'Crédito (DataCredito, SisteCredito, Addi)' : 
+                   metodo}
                 </option>
               ))}
             </select>
