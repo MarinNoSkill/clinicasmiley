@@ -22,6 +22,7 @@ interface DentalRecord {
   id_cuenta: number | null;
   id_cuenta_abono: number | null;
   valor_pagado: number;
+  notas?: string | null;
 }
 
 interface LiquidacionHistorial {
@@ -149,6 +150,7 @@ const HistorialLiquidaciones: React.FC = () => {
       'Método de Pago': registro.metodoPago || 'N/A',
       'Método de Pago Abono': registro.metodoPagoAbono || 'N/A',
       'Valor Pagado': formatCOP(registro.valor_pagado),
+      'Notas': registro.notas || 'N/A'
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(datos);
@@ -300,6 +302,9 @@ const HistorialLiquidaciones: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                       Valor Pagado
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                      Notas
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -340,6 +345,9 @@ const HistorialLiquidaciones: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
                         {formatCOP(registro.valor_pagado)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.notas || 'N/A'}
                       </td>
                     </tr>
                   ))}
