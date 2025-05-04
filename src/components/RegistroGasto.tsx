@@ -36,6 +36,7 @@ const RegistroGasto: React.FC = () => {
     responsable: "",
     comentario: "",
   });
+  const [conceptoPersonalizado, setConceptoPersonalizado] = useState<string>("");
   const [responsables, setResponsables] = useState<string[]>([]);
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -92,14 +93,19 @@ const RegistroGasto: React.FC = () => {
       proveedor: isOtherSelected ? "" : (conceptoSeleccionado?.proveedor || ""),
       tipoGasto: isOtherSelected ? "" : (conceptoSeleccionado?.tipo || ""),
     });
+    setConceptoPersonalizado("");
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setGasto({
-      ...gasto,
-      [name]: name === "valor" ? parseFloat(value) || 0 : value,
-    });
+    if (name === "conceptoPersonalizado") {
+      setConceptoPersonalizado(value);
+    } else {
+      setGasto({
+        ...gasto,
+        [name]: name === "valor" ? parseFloat(value) || 0 : value,
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -119,7 +125,7 @@ const RegistroGasto: React.FC = () => {
 
     if (
       !gasto.fecha ||
-      !gasto.concepto ||
+      (!gasto.concepto && !conceptoPersonalizado) ||
       !gasto.proveedor ||
       !gasto.tipoGasto ||
       !gasto.valor ||
@@ -133,6 +139,7 @@ const RegistroGasto: React.FC = () => {
 
     const payload: GastoPayload = {
       ...gasto,
+      concepto: gasto.concepto === "Otro" ? conceptoPersonalizado : gasto.concepto,
       id_sede,
     };
 
@@ -158,6 +165,7 @@ const RegistroGasto: React.FC = () => {
         comentario: "",
       });
       setIsCustomConcept(false);
+      setConceptoPersonalizado("");
     } catch (err: any) {
       console.error("Error registrando gasto:", err);
       setError(err.response?.data?.error || err.message || "Error al registrar el gasto.");
@@ -218,8 +226,8 @@ const RegistroGasto: React.FC = () => {
             <label className="block text-sm font-medium text-gray-600">Concepto Personalizado</label>
             <input
               type="text"
-              name="concepto"
-              value={gasto.concepto === "Otro" ? "" : gasto.concepto}
+              name="conceptoPersonalizado"
+              value={conceptoPersonalizado}
               onChange={handleChange}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm p-1.5"
               placeholder="Ingrese el concepto personalizado"
@@ -269,9 +277,7 @@ const RegistroGasto: React.FC = () => {
         </div>
 
         <div className="mb-4">
-          <label
-
- className="block text-sm font-medium text-gray-600">Responsable</label>
+          <label className="block text-sm font-medium text-gray-600">Responsable</label>
           <select
             name="responsable"
             value={gasto.responsable}
