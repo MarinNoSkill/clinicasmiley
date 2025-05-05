@@ -12,6 +12,7 @@ import Sedes from './components/Sedes';
 import { DentalRecord } from './types';
 import RegistroGasto from './components/RegistroGasto';
 import HistorialGastos from './components/HistorialGastos';
+import GestionLaboratorios from './components/GestionLaboratorios';
 
 axios.interceptors.response.use(
   (response) => response,
@@ -117,6 +118,17 @@ function App() {
                 <>
                   <Navbar onLogout={handleLogout} />
                   <EstandarizacionServicios />
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gestion-laboratorios"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <>
+                  <Navbar onLogout={handleLogout} />
+                  <GestionLaboratorios />
                 </>
               </ProtectedRoute>
             }

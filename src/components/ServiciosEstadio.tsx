@@ -8,6 +8,14 @@ interface Service {
   sesiones: number;
   descripcion: string;
 }
+  
+interface CostoLaboratorio {
+  id_laboratorio: number;
+  nombre_serv: string;
+  nombre_insumo: string;
+  costo: number;
+  descripcion: string;
+}
 
 const ServiciosEstadio: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
@@ -19,6 +27,16 @@ const ServiciosEstadio: React.FC = () => {
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedDescription, setSelectedDescription] = useState<string>('');
+  const [showLabModal, setShowLabModal] = useState<boolean>(false);
+  const [selectedService, setSelectedService] = useState<string>('');
+  const [laboratorios, setLaboratorios] = useState<CostoLaboratorio[]>([]);
+  const [loadingLabs, setLoadingLabs] = useState<boolean>(false);
+  const [newInsumo, setNewInsumo] = useState<{nombre: string; costo: number; descripcion: string}>({ 
+    nombre: '', 
+    costo: 0, 
+    descripcion: '' 
+  });
+  const [costosLaboratorio, setCostosLaboratorio] = useState<{[key: string]: number}>({});
 
   useEffect(() => {
     const loadServices = async () => {
@@ -26,6 +44,7 @@ const ServiciosEstadio: React.FC = () => {
         setLoading(true);
         const fetchedServices = await fetchStadiumServices();
         setServices(fetchedServices);
+        await cargarTodosLosLaboratorios(fetchedServices);
       } catch (err) {
         console.error('Error fetching stadium services:', err);
         setError('Error al cargar los servicios de Estadio. Por favor, intenta de nuevo.');
@@ -36,6 +55,138 @@ const ServiciosEstadio: React.FC = () => {
 
     loadServices();
   }, []);
+
+  // Cargar todos los costos de laboratorio para todos los servicios
+  const cargarTodosLosLaboratorios = async (servicios: Service[]) => {
+    try {
+      const costosMap: {[key: string]: number} = {};
+      const token = localStorage.getItem('token');
+      
+      await Promise.all(
+        servicios.map(async (servicio) => {
+          try {
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/laboratorios`, {
+              params: { nombre_serv: servicio.nombre },
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            
+            if (response.data && response.data.length > 0) {
+              // Suma todos los costos de laboratorio para este servicio
+              const totalCosto = response.data.reduce(
+                (sum: number, item: CostoLaboratorio) => sum + (item.costo || 0), 
+                0
+              );
+              costosMap[servicio.nombre] = totalCosto;
+              console.log(`Costos de laboratorio para ${servicio.nombre}: ${totalCosto}`);
+            } else {
+              costosMap[servicio.nombre] = 0;
+            }
+          } catch (error) {
+            console.error(`Error al cargar laboratorios para ${servicio.nombre}:`, error);
+            costosMap[servicio.nombre] = 0;
+          }
+        })
+      );
+      
+      setCostosLaboratorio(costosMap);
+      console.log("Costos de laboratorio cargados para todos los servicios:", costosMap);
+    } catch (error) {
+      console.error("Error al cargar todos los laboratorios:", error);
+    }
+  };
+
+  // Función para cargar laboratorios de un servicio específico
+  const cargarLaboratoriosPorServicio = async (nombreServicio: string) => {
+    if (!nombreServicio) return;
+    
+    setLoadingLabs(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/laboratorios`, {
+        params: { nombre_serv: nombreServicio },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      setLaboratorios(response.data || []);
+    } catch (error) {
+      console.error(`Error al cargar laboratorios para ${nombreServicio}:`, error);
+      setLaboratorios([]);
+    } finally {
+      setLoadingLabs(false);
+    }
+  };
+
+  const handleAgregarInsumo = async () => {
+    if (!selectedService || !newInsumo.nombre || newInsumo.costo <= 0) {
+      setError('Por favor, ingresa un nombre y un costo válido para el insumo.');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/laboratorios`,
+        {
+          nombre_serv: selectedService,
+          nombre_insumo: newInsumo.nombre,
+          costo: newInsumo.costo,
+          descripcion: newInsumo.descripcion
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      // Actualizar la lista de insumos
+      setLaboratorios([...laboratorios, response.data]);
+      
+      // Actualizar los costos totales
+      setCostosLaboratorio({
+        ...costosLaboratorio,
+        [selectedService]: (costosLaboratorio[selectedService] || 0) + newInsumo.costo
+      });
+
+      // Limpiar el formulario
+      setNewInsumo({ nombre: '', costo: 0, descripcion: '' });
+      setError('');
+    } catch (err: any) {
+      console.error('Error al añadir insumo de laboratorio:', err);
+      setError(
+        err.response?.data?.error || 'Error al añadir el insumo. Por favor, intenta de nuevo.'
+      );
+    }
+  };
+
+  const handleEliminarInsumo = async (idLaboratorio: number, costo: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/laboratorios`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { id_laboratorio: idLaboratorio },
+      });
+
+      // Actualizar la lista de insumos
+      setLaboratorios(laboratorios.filter(lab => lab.id_laboratorio !== idLaboratorio));
+      
+      // Actualizar los costos totales
+      setCostosLaboratorio({
+        ...costosLaboratorio,
+        [selectedService]: Math.max(0, (costosLaboratorio[selectedService] || 0) - costo)
+      });
+
+    } catch (err: any) {
+      console.error('Error al eliminar insumo de laboratorio:', err);
+      setError(
+        err.response?.data?.error || 'Error al eliminar el insumo. Por favor, intenta de nuevo.'
+      );
+    }
+  };
+
+  const handleOpenLabModal = (servicio: string) => {
+    setSelectedService(servicio);
+    cargarLaboratoriosPorServicio(servicio);
+    setShowLabModal(true);
+  };
 
   const handleEdit = (service: Service) => {
     setEditingService(service);
@@ -191,6 +342,9 @@ const ServiciosEstadio: React.FC = () => {
                   Precio Estimado (COP)
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Costo Laboratorio
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sesiones
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -238,6 +392,22 @@ const ServiciosEstadio: React.FC = () => {
                     ) : (
                       formatCOP(servicio.precio)
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div className="flex items-center">
+                      <span className={costosLaboratorio[servicio.nombre] > 0 ? "text-red-600 font-medium" : "text-gray-500"}>
+                        {costosLaboratorio[servicio.nombre] > 0 
+                          ? `-${formatCOP(costosLaboratorio[servicio.nombre])}` 
+                          : formatCOP(0)}
+                      </span>
+                      <button
+                        onClick={() => handleOpenLabModal(servicio.nombre)}
+                        className="ml-2 text-blue-600 hover:text-blue-800 focus:outline-none text-xs"
+                        title="Gestionar insumos de laboratorio"
+                      >
+                        {costosLaboratorio[servicio.nombre] > 0 ? 'Ver/Editar' : 'Añadir'}
+                      </button>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {editingService?.nombre === servicio.nombre ? (
@@ -457,6 +627,132 @@ const ServiciosEstadio: React.FC = () => {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setShowDescriptionModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para gestionar insumos de laboratorio */}
+      {showLabModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl mx-4 transform transition-all">
+            <div className="mb-4 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Gestionar Insumos de Laboratorio: {selectedService}
+              </h3>
+              <button
+                onClick={() => setShowLabModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Formulario para agregar nuevo insumo */}
+            <div className="mb-6 bg-gray-50 p-4 rounded-md">
+              <h4 className="text-md font-medium text-gray-800 mb-3">Añadir Nuevo Insumo</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Nombre del Insumo</label>
+                  <input
+                    type="text"
+                    value={newInsumo.nombre}
+                    onChange={(e) => setNewInsumo({ ...newInsumo, nombre: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Ej: Material dental"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Costo (COP)</label>
+                  <input
+                    type="number"
+                    value={newInsumo.costo || ''}
+                    onChange={(e) => setNewInsumo({ ...newInsumo, costo: parseFloat(e.target.value) || 0 })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    min="0"
+                    step="1000"
+                    placeholder="Ej: 50000"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Descripción</label>
+                  <input
+                    type="text"
+                    value={newInsumo.descripcion || ''}
+                    onChange={(e) => setNewInsumo({ ...newInsumo, descripcion: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Ej: Descripción del insumo"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleAgregarInsumo}
+                className="mt-3 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-700 text-white rounded-md hover:bg-teal-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Añadir Insumo
+              </button>
+            </div>
+
+            {/* Lista de insumos actuales */}
+            <div className="overflow-x-auto">
+              {loadingLabs ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                  <p className="mt-2 text-sm text-gray-600">Cargando insumos...</p>
+                </div>
+              ) : laboratorios.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  No hay insumos de laboratorio registrados para este servicio.
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Insumo</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {laboratorios.map((lab) => (
+                      <tr key={lab.id_laboratorio}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{lab.nombre_insumo}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(lab.costo)}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{lab.descripcion || 'N/A'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <button
+                            onClick={() => handleEliminarInsumo(lab.id_laboratorio, lab.costo)}
+                            className="text-red-600 hover:text-red-800 font-medium"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-50 font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">TOTAL</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
+                        {formatCOP(laboratorios.reduce((sum, lab) => sum + lab.costo, 0))}
+                      </td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowLabModal(false)}
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300"
               >
                 Cerrar
