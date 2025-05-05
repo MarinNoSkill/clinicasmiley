@@ -100,7 +100,7 @@ const GestionLaboratorios: React.FC = () => {
         params: { nombre_serv: selectedServicio },
         headers: { Authorization: `Bearer ${token}` },
       });
-      setLaboratorios(response.data);
+      setLaboratorios(response.data as Laboratorio[]);
     } catch (err: any) {
       console.error('Error al cargar los laboratorios:', err);
       if (err.response?.status === 401) {
@@ -154,7 +154,11 @@ const GestionLaboratorios: React.FC = () => {
       cargarLaboratorios();
     } catch (err: any) {
       console.error('Error al agregar el insumo de laboratorio:', err);
-      setError(err.response?.data?.error || 'Error al agregar el insumo de laboratorio');
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else {
+        setError('Error al agregar el insumo de laboratorio');
+      }
     } finally {
       setLoading(false);
     }
