@@ -30,8 +30,8 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   const gastosRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const serviciosRef = useRef<HTMLDivElement>(null);
-  const mobileMenuRef = useRef<HTMLDivElement>(null); // Contenido del menú móvil
-  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null); // Botón hamburguesa
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   // Verificadores de ruta activa (solo para resaltar en escritorio)
   const isLiquidacionActive = ['/liquidacion', '/historial'].includes(location.pathname);
@@ -114,9 +114,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside);
     };
-  }, [isMenuOpen]); // Dependencia clave para la lógica del menú móvil
-
-  // --- Funciones de Toggle (principalmente para escritorio ahora) ---
+  }, [isMenuOpen]);
 
   const handleLogout = () => {
     localStorage.removeItem('token'); localStorage.removeItem('user'); localStorage.removeItem('selectedSede');
@@ -133,7 +131,6 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   // Solo para el menú principal móvil
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
-    // Ya no necesitamos cerrar submenús aquí porque no existen en móvil
   };
 
   // Para el menú desplegable de PERFIL (escritorio)
@@ -274,7 +271,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
         ref={mobileMenuRef}
         id="mobile-menu"
         className={`fixed inset-y-0 left-0 z-50 w-3/4 max-w-sm bg-white shadow-xl transform transition-transform ease-in-out duration-300 md:hidden ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        onClick={(e) => e.stopPropagation()} // Evita cerrar al hacer clic dentro
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="h-full flex flex-col">
           {/* Cabecera Menú Móvil */}
@@ -340,8 +337,8 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                 Historial Gastos
               </NavLink>
 
-            </div> {/* Fin px-2 space-y-1 */}
-          </div> {/* Fin flex-grow */}
+            </div>
+          </div>
 
           {/* Acciones Fijas Abajo (Móvil) */}
           <div className="px-2 py-3 border-t border-gray-200 flex-shrink-0 space-y-2">
