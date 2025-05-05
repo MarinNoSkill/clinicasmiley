@@ -268,7 +268,7 @@ const GestionLaboratorios: React.FC = () => {
                   onClick={() => setTipoServicio('normal')}
                   className={`px-4 py-2 rounded-md ${
                     tipoServicio === 'normal'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-teal-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -278,7 +278,7 @@ const GestionLaboratorios: React.FC = () => {
                   onClick={() => setTipoServicio('estadio')}
                   className={`px-4 py-2 rounded-md ${
                     tipoServicio === 'estadio'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-teal-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -354,7 +354,7 @@ const GestionLaboratorios: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
               disabled={loading}
             >
               {loading ? 'Agregando...' : 'Agregar Insumo'}
