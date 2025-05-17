@@ -36,7 +36,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
   // Verificadores de ruta activa (solo para resaltar en escritorio)
   const isLiquidacionActive = ['/liquidacion', '/historial'].includes(location.pathname);
   const isGastosActive = ['/gastos', '/HistorialGastos'].includes(location.pathname);
-  const isServiciosActive = ['/estandarizacion', '/gestion-laboratorios', '/servicios-estadio'].includes(location.pathname);
+  const isServiciosActive = ['/estandarizacion', '/gestion-laboratorios', '/servicios-estadio', '/gestion-personal'].includes(location.pathname);
 
   // Cierra todos los menús desplegables y el menú móvil
   const closeAllMenus = () => {
@@ -218,6 +218,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                        <div className="py-1" role="menu" aria-orientation="vertical">
                         <NavLink to="/estandarizacion" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Estandarización</NavLink>
                         <NavLink to="/gestion-laboratorios" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Laboratorios</NavLink>
+                        <NavLink to="/gestion-personal" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Gestión Personal</NavLink>
                         {isEstadioSede && (<NavLink to="/servicios-estadio" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Servicios Estadio</NavLink>)}
                        </div>
                     </div>
@@ -320,6 +321,9 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                   </NavLink>
                   <NavLink to="/gestion-laboratorios" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-blue-700 bg-blue-100' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'}`} onClick={() => handleNavigation('/gestion-laboratorios')}>
                     Laboratorios
+                  </NavLink>
+                  <NavLink to="/gestion-personal" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-blue-700 bg-blue-100' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'}`} onClick={() => handleNavigation('/gestion-personal')}>
+                    Gestión Personal
                   </NavLink>
                   {isEstadioSede && (
                     <NavLink to="/servicios-estadio" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-blue-700 bg-blue-100' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'}`} onClick={() => handleNavigation('/servicios-estadio')}>

@@ -13,6 +13,7 @@ import { DentalRecord } from './types';
 import RegistroGasto from './components/RegistroGasto';
 import HistorialGastos from './components/HistorialGastos';
 import GestionLaboratorios from './components/GestionLaboratorios';
+import GestionPersonal from './components/GestionPersonal';
 
 axios.interceptors.response.use(
   (response) => response,
@@ -173,6 +174,17 @@ function App() {
                 <>
                   <Navbar onLogout={handleLogout} />
                   <ServiciosEstadio />
+                </>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gestion-personal"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <>
+                  <Navbar onLogout={handleLogout} />
+                  <GestionPersonal />
                 </>
               </ProtectedRoute>
             }
