@@ -38,6 +38,10 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const [selectedServicioLab, setSelectedServicioLab] = useState<string>('');
   const [laboratoriosServicio, setLaboratoriosServicio] = useState<CostoLaboratorio[]>([]);
   const [loadingLaboratorios, setLoadingLaboratorios] = useState<boolean>(false);
+  const [showCompletarModal, setShowCompletarModal] = useState<boolean>(false);
+  const [servicioACompletar, setServicioACompletar] = useState<DentalRecord | null>(null);
+  const [metodoPagoCompletar, setMetodoPagoCompletar] = useState<string>('');
+  const [metodosDisponibles, setMetodosDisponibles] = useState<string[]>([]);
 
   const navigate = useNavigate();
   const id_sede = localStorage.getItem('selectedSede');
@@ -194,30 +198,15 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   );
   console.log('Registros agrupados por paciente y servicio:', registrosAgrupados);
 
-  const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) => {
-    if (!grupo || grupo.length === 0) return false;
+  const serviciosCompletados = Object.values(registrosAgrupados).filter((grupo) =>
+    grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
+  );
+  console.log('Servicios completados:', serviciosCompletados);
 
-    const primerRegistro = grupo[0];
-    const sesionesTotales = primerRegistro.sesiones || 1; 
-
-    const tieneFechaFinal = grupo.every(registro => registro.fechaFinal !== null);
-    if (tieneFechaFinal) {
-        const valorLiquidadoTotalGrupo = grupo.reduce((sum, r) => sum + (r.valor_liquidado ?? 0), 0);
-        return valorLiquidadoTotalGrupo <= 0;
-    }
-
-
-    if (sesionesTotales > 1 && !tieneFechaFinal) {
-        const valorLiquidadoTotalGrupo = grupo.reduce((sum, r) => sum + (r.valor_liquidado ?? 0), 0);
-        return valorLiquidadoTotalGrupo <= 0;
-    }
-
-    return false;
-  });
-  console.log('Servicios completados (lógica actualizada):', serviciosCompletados);
-
-  const serviciosPendientes = Object.values(registrosAgrupados).filter(grupo => !serviciosCompletados.includes(grupo));
-  console.log('Servicios pendientes (lógica actualizada):', serviciosPendientes);
+  const serviciosPendientes = Object.values(registrosAgrupados).filter(
+    (grupo) => !grupo.every((registro) => registro.fechaFinal !== null && registro.valor_liquidado === 0)
+  );
+  console.log('Servicios pendientes:', serviciosPendientes);
 
   const calcularPorcentaje = (grupo: DentalRecord[]) => {
     if (esAuxiliar) {
@@ -316,7 +305,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       };
       console.log('Enviando nueva liquidación:', nuevaLiquidacion);
 
-      await axios.post(
+      try {
+        const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
         nuevaLiquidacion,
         {
@@ -325,6 +315,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           },
         }
       );
+        
+        console.log('Respuesta de liquidación exitosa:', response.data);
 
       // Filtrar los registros liquidados del estado local
       const idsServiciosLiquidados = grupo.map((registro) => registro.id);
@@ -335,9 +327,18 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       setRegistros(registrosRestantes);
       setServiciosLiquidados([...serviciosLiquidados, grupo]);
       console.log('Servicios liquidados actualizados:', serviciosLiquidados);
-    } catch (err) {
-      console.error('Error al liquidar el grupo:', err);
+      } catch (error: any) {
+        if (error.response) {
+          console.error('Error de API al liquidar:', error.response.data);
+          setError(`Error al liquidar: ${JSON.stringify(error.response.data)}`);
+        } else {
+          console.error('Error al liquidar el grupo:', error);
       setError('Error al liquidar el grupo. Por favor, intenta de nuevo.');
+        }
+      }
+    } catch (err) {
+      console.error('Error en el cálculo de liquidación:', err);
+      setError('Error en el cálculo de liquidación. Por favor, intenta de nuevo.');
     }
   };
 
@@ -357,7 +358,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       };
       console.log('Enviando liquidación de todos los servicios:', nuevaLiquidacion);
 
-      await axios.post(
+      try {
+        const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/liquidations`,
         nuevaLiquidacion,
         {
@@ -366,6 +368,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
           },
         }
       );
+        
+        console.log('Respuesta de liquidación exitosa:', response.data);
 
       // Filtrar los registros liquidados del estado local
       const idsServiciosLiquidados = serviciosCompletados.flatMap((grupo) =>
@@ -376,9 +380,18 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         (registro) => !idsServiciosLiquidados.includes(registro.id)
       );
       setRegistros(registrosRestantes);
-    } catch (err) {
-      console.error('Error al liquidar todos los servicios:', err);
+      } catch (error: any) {
+        if (error.response) {
+          console.error('Error de API al liquidar todos:', error.response.data);
+          setError(`Error al liquidar: ${JSON.stringify(error.response.data)}`);
+        } else {
+          console.error('Error al liquidar todos los servicios:', error);
       setError('Error al liquidar los servicios. Por favor, intenta de nuevo.');
+        }
+      }
+    } catch (err) {
+      console.error('Error en el cálculo de liquidación general:', err);
+      setError('Error en el cálculo de liquidación. Por favor, intenta de nuevo.');
     }
   };
 
@@ -454,6 +467,125 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Liquidación');
     XLSX.writeFile(workbook, `Liquidacion_${doctorSeleccionado}_${fechaInicio}_a_${fechaFin}.xlsx`);
     console.log('Archivo Excel generado exitosamente');
+  };
+
+  // Función para obtener métodos de pago disponibles
+  const cargarMetodosPago = async () => {
+    try {
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/metodos-pago`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (response.data && Array.isArray(response.data)) {
+        const metodos = response.data.map((m: any) => m.descpMetodo);
+        setMetodosDisponibles(metodos);
+      } else {
+        // Si no podemos obtener los métodos, usamos unos por defecto
+        setMetodosDisponibles(['Efectivo', 'Transferencia', 'Datáfono', 'Crédito']);
+      }
+    } catch (error) {
+      console.error('Error al cargar métodos de pago:', error);
+      // Métodos por defecto
+      setMetodosDisponibles(['Efectivo', 'Transferencia', 'Datáfono', 'Crédito']);
+    }
+  };
+
+  useEffect(() => {
+    cargarMetodosPago();
+  }, []);
+
+  // Función para abrir el modal de completar servicio
+  const abrirModalCompletarServicio = (registro: DentalRecord) => {
+    setServicioACompletar(registro);
+    setMetodoPagoCompletar('Efectivo'); // Default
+    setShowCompletarModal(true);
+  };
+
+  // Función para manejar la completación del servicio
+  const handleCompletarServicio = async (registro: DentalRecord) => {
+    try {
+      console.log('Completando servicio:', registro);
+      
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      const valorRestante = registro.valor_liquidado || 0;
+      let idMetodo = null;
+
+      if (metodoPagoCompletar) {
+        try {
+          const response = await axios.get(
+            `${import.meta.env.VITE_API_URL}/api/metodos-pago`,
+            {
+              params: { nombre: metodoPagoCompletar },
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          if (response.data && typeof response.data === 'object' && 'id_metodo' in response.data) {
+            idMetodo = response.data.id_metodo;
+          }
+        } catch (error) {
+          console.error('Error al obtener ID de método de pago:', error);
+        }
+      }
+      
+      const actualizacionRegistro = {
+        id: registro.id,
+        fechaFinal: fechaHoy,
+        valor_liquidado: 0, // Completamente pagado
+        valor_pagado: (registro.valor_pagado || 0) + valorRestante,
+        id_metodo: idMetodo,
+        estado: true // Marcamos el estado como completado
+      };
+      
+      console.log('Actualizando registro con fecha final, completando pago y estado:', actualizacionRegistro);
+
+      try {
+        const response = await axios.put(
+          `${import.meta.env.VITE_API_URL}/api/records/${registro.id}`,
+          actualizacionRegistro,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        
+        console.log('Respuesta de actualización exitosa:', response.data);
+
+        const registrosActualizados = registros.map(r => 
+          r.id === registro.id ? { 
+            ...r, 
+            fechaFinal: fechaHoy, 
+            valor_liquidado: 0,
+            valor_pagado: (r.valor_pagado || 0) + valorRestante,
+            metodoPago: metodoPagoCompletar,
+            estado: true // Actualizamos el estado local también
+          } : r
+        );
+        
+        setRegistros(registrosActualizados);
+        setShowCompletarModal(false);
+        
+        alert(`Servicio completado para ${registro.nombrePaciente}. Se ha registrado el pago de ${formatCOP(valorRestante)}`);
+        
+      } catch (error: any) {
+        if (error.response) {
+          console.error('Error de API al actualizar:', error.response.data);
+          setError(`Error al completar: ${JSON.stringify(error.response.data)}`);
+        } else {
+          console.error('Error al completar el servicio:', error);
+          setError('Error al completar el servicio. Por favor, intenta de nuevo.');
+        }
+      }
+    } catch (err) {
+      console.error('Error al completar el servicio:', err);
+      setError('Error al completar el servicio. Por favor, intenta de nuevo.');
+    }
   };
 
   if (loading) {
@@ -834,8 +966,115 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         </div>
       )}
 
-      {/* Servicios Pendientes */}
-      {/* ...existing code... */}
+      {serviciosPendientes.length > 0 && (
+        <div className="bg-white shadow-lg rounded-lg p-6">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">Servicios Pendientes de Completar</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Doctor/Auxiliar</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Documento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Servicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Progreso Sesiones</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago Abono</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Descuento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total Pagado</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Restante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Tipo de Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Porcentaje</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Inicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Final</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Notas</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {serviciosPendientes.flat().map((registro, index) => {
+                  const grupo = serviciosPendientes.find((g) =>
+                    g.some((r) => r.id === registro.id)
+                  )!;
+                  const servicioNombre = grupo[0].servicio;
+                  const servicio = servicios.find((s) => s.nombre === servicioNombre);
+                  const precioServicio = servicio ? servicio.precio : 0;
+                  const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
+                    ? grupo[0].sesiones
+                    : grupo.length;
+                  const totalGrupo = precioServicio * sesionesCompletadas;
+                  const sesionesTotales = grupo[0].sesiones || 1;
+                  const costoLaboratorio = costosLaboratorio[servicioNombre] || 0;
+                  const porcentaje = esAuxiliar
+                    ? grupo[0].esPacientePropio
+                      ? 20
+                      : 10
+                    : grupo[0].idPorc === 2
+                    ? 50
+                    : 40;
+
+                  return (
+                    <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreDoctor}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombrePaciente}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div className="flex items-center">
+                          <span>{registro.servicio}</span>
+                          {costoLaboratorio > 0 && (
+                            <button 
+                              onClick={() => abrirDetallesLaboratorio(servicioNombre)}
+                              className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                              title="Ver detalles de laboratorio"
+                            >
+                              (Ver lab)
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono ?? 0)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono ?? 0)})` : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento ?? 0)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(precioServicio)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {grupo[0].esPacientePropio
+                          ? esAuxiliar
+                            ? 'Propio (20%)'
+                            : 'Propio (50%)'
+                          : esAuxiliar
+                          ? 'Clínica (10%)'
+                          : 'Clínica (40%)'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fechaFinal || 'Pendiente'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.notas || 'N/A'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <button
+                          onClick={() => abrirModalCompletarServicio(registro)}
+                          className="px-4 py-2 rounded-md text-white font-medium bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                        >
+                          Completar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal para detalles de laboratorio */}
       {showLabModal && (
@@ -904,6 +1143,73 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200"
                 >
                   Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para completar servicio */}
+      {showCompletarModal && servicioACompletar && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[80vh] overflow-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">
+                  Completar Servicio
+                </h3>
+                <button 
+                  onClick={() => setShowCompletarModal(false)}
+                  className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Paciente:</span> {servicioACompletar.nombrePaciente}
+                </p>
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Servicio:</span> {servicioACompletar.servicio}
+                </p>
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Valor Restante a Pagar:</span> {formatCOP(servicioACompletar.valor_liquidado || 0)}
+                </p>
+                
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Método de Pago
+                  </label>
+                  <select
+                    value={metodoPagoCompletar}
+                    onChange={(e) => setMetodoPagoCompletar(e.target.value)}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    {metodosDisponibles.map((metodo) => (
+                      <option key={metodo} value={metodo}>
+                        {metodo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowCompletarModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 focus:outline-none"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleCompletarServicio(servicioACompletar)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
+                >
+                  Completar y Registrar Pago
                 </button>
               </div>
             </div>

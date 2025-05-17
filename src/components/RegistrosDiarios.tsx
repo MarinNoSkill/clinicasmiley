@@ -71,6 +71,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [loadingBase, setLoadingBase] = useState<boolean>(false);
   const [errorBase, setErrorBase] = useState<string>('');
   const [baseInput, setBaseInput] = useState<string>('0');
+  const [serviciosPendientes, setServiciosPendientes] = useState<{[key: string]: DentalRecord[]}>({});
+  const [seleccionadoServicioPendiente, setSeleccionadoServicioPendiente] = useState<DentalRecord | null>(null);
+  const [mostrarServiciosPendientes, setMostrarServiciosPendientes] = useState<boolean>(false);
 
   const serviciosAuxiliarPermitidos = [
   'Sesión de aclaramiento',
@@ -320,6 +323,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     setSaldoAFavor(paciente.tot_abono || 0);
     setPacientesCoincidentes([]);
     setMostrarListaPacientes(false);
+    
+    // Buscamos inmediatamente servicios pendientes para este paciente
+    cargarServiciosPendientes(paciente.doc_id);
   };
 
   const resetStates = () => {
@@ -433,6 +439,89 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     }
   };
 
+  const cargarServiciosPendientes = useCallback(async (docId: string) => {
+    if (!docId) {
+      setServiciosPendientes({});
+      return;
+    }
+
+    try {
+      console.log("Buscando servicios pendientes para el documento:", docId);
+      
+      // Filtramos registros con valor_liquidado > 0 (tiene saldo pendiente)
+      const serviciosPendientesTemp = registros.filter(
+        (registro) => 
+          registro.docId === docId && 
+          registro.valor_liquidado > 0 &&
+          !registro.fechaFinal
+      );
+
+      if (serviciosPendientesTemp.length > 0) {
+        console.log(`Se encontraron ${serviciosPendientesTemp.length} servicios pendientes`);
+      } else {
+        console.log("No se encontraron servicios pendientes");
+      }
+
+      // Agrupamos por servicio para combinar múltiples registros del mismo servicio
+      const agrupados = serviciosPendientesTemp.reduce((acc, registro) => {
+        const key = registro.servicio;
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(registro);
+        return acc;
+      }, {} as {[key: string]: DentalRecord[]});
+
+      Object.entries(agrupados).forEach(([servicio, registros]) => {
+        console.log(`Servicio pendiente: ${servicio}, Monto: ${formatCOP(registros[0]?.valor_liquidado || 0)}`);
+      });
+
+      setServiciosPendientes(agrupados);
+      // Si hay servicios pendientes, los mostramos automáticamente
+      if (Object.keys(agrupados).length > 0) {
+        console.log("Mostrando automáticamente servicios pendientes");
+      }
+
+    } catch (error) {
+      console.error("Error al cargar servicios pendientes:", error);
+      setServiciosPendientes({});
+    }
+  }, [registros]);
+
+  // Cuando cambia el documento del paciente, cargamos sus servicios pendientes
+  useEffect(() => {
+    const currentTabData = tabs[activeTab];
+    if (currentTabData.docId) {
+      cargarServiciosPendientes(currentTabData.docId);
+    }
+  }, [tabs, activeTab, cargarServiciosPendientes]);
+
+  const seleccionarServicioPendiente = (servicio: string) => {
+    if (!serviciosPendientes[servicio]?.length) return;
+    
+    const registro = serviciosPendientes[servicio][0];
+    setSeleccionadoServicioPendiente(registro);
+    
+    updateTab(activeTab, (prev) => ({
+      ...prev,
+      servicio: [servicio],
+      nombrePaciente: registro.nombrePaciente,
+      docId: registro.docId,
+      nombreDoctor: registro.nombreDoctor,
+    }));
+
+    // Establecemos automáticamente el valor pendiente como valor a pagar
+    setValorPagado(registro.valor_liquidado.toString());
+    
+    // Hacemos scroll a la sección de método de pago para facilitar la completación
+    setTimeout(() => {
+      const metodoPagoElement = document.querySelector('[name="metodoPago"]');
+      if (metodoPagoElement) {
+        metodoPagoElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -465,6 +554,108 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         }
         if (!titularCredito) {
           setError('Por favor, ingresa el nombre del titular del crédito para Crédito.');
+          return;
+        }
+      }
+
+      if (seleccionadoServicioPendiente) {
+        const registroId = seleccionadoServicioPendiente.id;
+        const valorPagadoNum = parseNumberInput(valorPagado);
+        
+        console.log(`Completando pago pendiente para servicio: ${seleccionadoServicioPendiente.servicio}`);
+        console.log(`Valor pendiente actual: ${formatCOP(seleccionadoServicioPendiente.valor_liquidado)}`);
+        console.log(`Valor a pagar ahora: ${formatCOP(valorPagadoNum)}`);
+        
+        // Verificamos si el pago actual completa el servicio
+        const completa = valorPagadoNum >= seleccionadoServicioPendiente.valor_liquidado;
+        
+        // Preparamos los datos a actualizar
+        const payload: Record<string, any> = {
+          id: registroId,
+          // Acumulamos el valor pagado
+          valor_pagado: seleccionadoServicioPendiente.valor_pagado + valorPagadoNum,
+          // Si completa el pago, ponemos el valor_liquidado en 0, sino restamos lo pagado
+          valor_liquidado: completa ? 0 : seleccionadoServicioPendiente.valor_liquidado - valorPagadoNum,
+          // Si completa el pago, actualizamos la fecha final
+          fechaFinal: completa ? fechaSeleccionada : null,
+          id_metodo: null
+        };
+        
+        console.log(`¿Pago completo? ${completa ? 'SÍ' : 'NO'}`);
+        console.log(`Nuevo valor pagado: ${formatCOP(payload.valor_pagado)}`);
+        console.log(`Valor restante: ${formatCOP(payload.valor_liquidado)}`);
+        
+        // Obtenemos el id del método de pago
+        if (currentTab.metodoPago) {
+          try {
+            const response = await axios.get(
+              `${import.meta.env.VITE_API_URL}/api/metodos-pago`,
+              {
+                params: { nombre: currentTab.metodoPago },
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+              }
+            );
+            // Tipamos correctamente la respuesta para manejar el id_metodo
+            interface MetodoPago {
+              id_metodo: number;
+              [key: string]: any;
+            }
+            
+            if (response.data && typeof response.data === 'object') {
+              const metodoPago = response.data as MetodoPago;
+              if ('id_metodo' in metodoPago) {
+                payload.id_metodo = metodoPago.id_metodo;
+              }
+            }
+          } catch (error) {
+            console.error('Error al obtener ID de método de pago:', error);
+          }
+        }
+        
+        console.log('Actualizando servicio pendiente en la base de datos:', payload);
+        
+        try {
+          const updateResponse = await axios.put(
+            `${import.meta.env.VITE_API_URL}/api/records/${registroId}`,
+            payload,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`,
+              },
+            }
+          );
+          
+          console.log('Servicio actualizado correctamente:', updateResponse.data);
+          
+          // Actualizamos la lista de registros
+          await fetchUpdatedRecords();
+          // Limpiamos el servicio seleccionado
+          setSeleccionadoServicioPendiente(null);
+          // Reseteamos el formulario
+          resetForm();
+          
+          // Si el pago fue en efectivo, actualizamos la base de efectivo
+          if (currentTab.metodoPago === 'Efectivo') {
+            let newBaseEfectivo = baseEfectivo + valorPagadoNum;
+            try {
+              const updatedBase = await updateCajaBase(id_sede, newBaseEfectivo);
+              setBaseEfectivo(updatedBase);
+              setBaseInput(formatNumberInput(updatedBase.toString()));
+            } catch (err) {
+              console.error('Error al actualizar la base de efectivo:', err);
+              setErrorBase('Error al actualizar la base de efectivo.');
+            }
+          }
+          
+          // Mostramos alerta de éxito
+          alert(`Pago ${completa ? 'completado' : 'parcial'} registrado con éxito para el servicio: ${seleccionadoServicioPendiente.servicio}. ${completa ? 'El servicio ha sido marcado como completado.' : 'Aún queda un saldo pendiente de ' + formatCOP(payload.valor_liquidado)}`);
+          
+          return;
+        } catch (error) {
+          console.error('Error al actualizar el servicio pendiente:', error);
+          setError('Error al actualizar el servicio pendiente. Por favor, intenta de nuevo.');
           return;
         }
       }
@@ -589,9 +780,11 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     }
 
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/api/records`, {
+      await axios({
+        method: 'DELETE',
+        url: `${import.meta.env.VITE_API_URL}/api/records`,
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        data: { ids: selectedRecords, id_sede: parseInt(id_sede || '0', 10) },
+        data: { ids: selectedRecords, id_sede: parseInt(id_sede || '0', 10) }
       });
 
       setRegistros(registros.filter((registro) => !selectedRecords.includes(registro.id)));
@@ -834,6 +1027,54 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               </div>
             )}
           </div>
+
+          {/* Servicios Pendientes para este paciente */}
+          {tabs[activeTab].docId && Object.keys(serviciosPendientes).length > 0 && (
+            <div className="mt-4 bg-yellow-50 p-4 border border-yellow-300 rounded-lg">
+              <div className="flex items-center justify-between">
+                <label className="block text-lg font-medium text-yellow-800 mb-2">
+                  ¡ATENCIÓN! Este paciente tiene servicios con pagos pendientes
+                </label>
+              </div>
+              
+              <div className="bg-white p-3 rounded-md border border-yellow-200 mb-4">
+                {Object.entries(serviciosPendientes).map(([servicio, registros]) => (
+                  <div key={servicio} className="flex items-center justify-between py-3 px-4 mb-2 border-b border-yellow-100 bg-yellow-50 rounded-md">
+                    <div>
+                      <p className="font-medium text-lg">{servicio}</p>
+                      <p className="text-md text-red-600 font-semibold">Pendiente de pago: {formatCOP(registros[0]?.valor_liquidado || 0)}</p>
+                      <p className="text-sm text-gray-600">Fecha de inicio: {registros[0]?.fecha}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => seleccionarServicioPendiente(servicio)}
+                      className="px-4 py-2 bg-blue-600 text-white text-md rounded-lg hover:bg-blue-700 font-medium shadow-sm"
+                    >
+                      Completar Pago
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              {seleccionadoServicioPendiente && (
+                <div className="bg-green-50 p-4 rounded-md border-2 border-green-300 mb-4">
+                  <p className="font-bold text-green-800 text-lg">
+                    Completando pago para: {seleccionadoServicioPendiente.servicio}
+                  </p>
+                  <p className="text-md text-green-700 font-semibold my-2">
+                    Valor a pagar: {formatCOP(seleccionadoServicioPendiente.valor_liquidado)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSeleccionadoServicioPendiente(null)}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Saldo a Favor</label>
