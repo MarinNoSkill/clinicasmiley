@@ -533,55 +533,58 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         }
       }
       
-      const actualizacionRegistro = {
-        id: registro.id,
-        fechaFinal: fechaHoy,
-        valor_liquidado: 0, // Completamente pagado
-        valor_pagado: (registro.valor_pagado || 0) + valorRestante,
-        id_metodo: idMetodo,
-        estado: true // Marcamos el estado como completado
-      };
+      // Encontrar todos los registros del mismo grupo (mismo paciente y servicio)
+      const registrosDelGrupo = registros.filter(
+        r => r.nombrePaciente === registro.nombrePaciente && 
+             r.servicio === registro.servicio
+      );
       
-      console.log('Actualizando registro con fecha final, completando pago y estado:', actualizacionRegistro);
-
-      try {
-        const response = await axios.put(
-          `${import.meta.env.VITE_API_URL}/api/records/${registro.id}`,
-          actualizacionRegistro,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+      // Actualizar todos los registros del grupo
+      for (const registroGrupo of registrosDelGrupo) {
+        const actualizacionRegistro = {
+          id: registroGrupo.id,
+          fechaFinal: fechaHoy,
+          valor_liquidado: 0,
+          valor_pagado: (registroGrupo.valor_pagado || 0) + (registroGrupo.valor_liquidado || 0),
+          id_metodo: idMetodo,
+          estado: true
+        };
         
-        console.log('Respuesta de actualización exitosa:', response.data);
-
-        const registrosActualizados = registros.map(r => 
-          r.id === registro.id ? { 
-            ...r, 
-            fechaFinal: fechaHoy, 
-            valor_liquidado: 0,
-            valor_pagado: (r.valor_pagado || 0) + valorRestante,
-            metodoPago: metodoPagoCompletar,
-            estado: true // Actualizamos el estado local también
-          } : r
-        );
-        
-        setRegistros(registrosActualizados);
-        setShowCompletarModal(false);
-        
-        alert(`Servicio completado para ${registro.nombrePaciente}. Se ha registrado el pago de ${formatCOP(valorRestante)}`);
-        
-      } catch (error: any) {
-        if (error.response) {
-          console.error('Error de API al actualizar:', error.response.data);
-          setError(`Error al completar: ${JSON.stringify(error.response.data)}`);
-        } else {
-          console.error('Error al completar el servicio:', error);
-          setError('Error al completar el servicio. Por favor, intenta de nuevo.');
+        try {
+          await axios.put(
+            `${import.meta.env.VITE_API_URL}/api/records/${registroGrupo.id}`,
+            actualizacionRegistro,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+        } catch (error) {
+          console.error(`Error al actualizar registro ${registroGrupo.id}:`, error);
+          throw error;
         }
       }
+
+      // Actualizar el estado local para todos los registros del grupo
+      const registrosActualizados = registros.map(r => 
+        registrosDelGrupo.some(rg => rg.id === r.id)
+          ? { 
+              ...r, 
+              fechaFinal: fechaHoy, 
+              valor_liquidado: 0,
+              valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0),
+              metodoPago: metodoPagoCompletar,
+              estado: true
+            } 
+          : r
+      );
+      
+      setRegistros(registrosActualizados);
+      setShowCompletarModal(false);
+      
+      alert(`Servicio completado para ${registro.nombrePaciente}. Se ha registrado el pago de ${formatCOP(valorRestante)}`);
+      
     } catch (err) {
       console.error('Error al completar el servicio:', err);
       setError('Error al completar el servicio. Por favor, intenta de nuevo.');
