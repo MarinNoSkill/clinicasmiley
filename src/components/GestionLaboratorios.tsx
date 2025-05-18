@@ -272,7 +272,7 @@ const GestionLaboratorios: React.FC = () => {
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
-                  Servicios Normales
+                  Servicios Smiley
                 </button>
                 <button
                   onClick={() => setTipoServicio('estadio')}

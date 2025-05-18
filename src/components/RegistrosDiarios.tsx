@@ -81,8 +81,8 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   'Promoción aclaramiento',
 ];
 
-  const MAX_SERVICES = 5;
-  const MAX_TABS = 7;
+  const MAX_SERVICES = 30;
+  const MAX_TABS = 10;
 
   const navigate = useNavigate();
   const id_sede = localStorage.getItem('selectedSede');

@@ -126,7 +126,7 @@ function App() {
           <Route
             path="/gestion-laboratorios"
             element={
-              <ProtectedRoute adminOnly={true}>
+              <ProtectedRoute>
                 <>
                   <Navbar onLogout={handleLogout} />
                   <GestionLaboratorios />
