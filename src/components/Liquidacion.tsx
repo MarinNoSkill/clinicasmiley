@@ -550,12 +550,12 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       // Actualizar todos los registros del grupo
       for (const registroGrupo of registrosDelGrupo) {
         const actualizacionRegistro = {
-          id: registroGrupo.id,
           fechaFinal: fechaHoy,
           valor_liquidado: 0,
           valor_pagado: (registroGrupo.valor_pagado || 0) + (registroGrupo.valor_liquidado || 0),
           id_metodo: idMetodo,
-          estado: true
+          estado: false,
+          completandoServicio: true
         };
         
         try {
@@ -583,13 +583,31 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
               valor_liquidado: 0,
               valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0),
               metodoPago: metodoPagoCompletar,
-              estado: true
+              estado: false
             } 
           : r
       );
       
       setRegistros(registrosActualizados);
       setShowCompletarModal(false);
+      setServicioACompletar(null);
+      
+      // Recargar los registros para asegurar que todo esté actualizado
+      try {
+        const response = await axios.get<DentalRecord[]>(`${import.meta.env.VITE_API_URL}/api/records`, {
+          params: { id_sede },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        const filteredRecords = response.data.filter(
+          (record) => record.estado === false || record.estado === null
+        );
+        setRegistros(filteredRecords);
+      } catch (error) {
+        console.error('Error al recargar registros:', error);
+      }
       
       alert(`Servicio completado para ${registro.nombrePaciente}. Se ha registrado el pago de ${formatCOP(valorRestante)}`);
       

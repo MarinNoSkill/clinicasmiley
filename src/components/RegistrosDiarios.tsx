@@ -27,7 +27,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [doctores, setDoctores] = useState<string[]>([]);
   const [asistentes, setAsistentes] = useState<string[]>([]);
   const [servicios, setServicios] = useState<{ nombre: string; precio: number }[]>([]);
-  const [metodosPago, setMetodosPago] = useState<string[]>([]);
+  const [metodosPago, setMetodosPago] = useState<string[]>(['Efectivo', 'Transferencia', 'Datáfono', 'Crédito']);
   const [cuentas, setCuentas] = useState<{ id_cuenta: number; cuentas: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
@@ -74,6 +74,10 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [serviciosPendientes, setServiciosPendientes] = useState<{[key: string]: DentalRecord[]}>({});
   const [seleccionadoServicioPendiente, setSeleccionadoServicioPendiente] = useState<DentalRecord | null>(null);
   const [mostrarServiciosPendientes, setMostrarServiciosPendientes] = useState<boolean>(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [servicioACompletar, setServicioACompletar] = useState<DentalRecord | null>(null);
+  const [metodoPagoCompletar, setMetodoPagoCompletar] = useState<string>('');
+  const [showCompletarModal, setShowCompletarModal] = useState<boolean>(false);
 
   const serviciosAuxiliarPermitidos = [
   'Sesión de aclaramiento',
@@ -325,7 +329,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     setMostrarListaPacientes(false);
     
     // Buscamos inmediatamente servicios pendientes para este paciente
-    cargarServiciosPendientes(paciente.doc_id);
+    cargarServiciosPendientes();
   };
 
   const resetStates = () => {
@@ -439,87 +443,179 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     }
   };
 
-  const cargarServiciosPendientes = useCallback(async (docId: string) => {
-    if (!docId) {
-      setServiciosPendientes({});
+  const cargarServiciosPendientes = useCallback(() => {
+    console.log('Cargando servicios pendientes...', registros);
+    const serviciosPendientesTemp: {[key: string]: DentalRecord[]} = {};
+    
+    registros.forEach((registro) => {
+      // Un servicio está pendiente si:
+      // 1. No tiene fecha final O
+      // 2. Tiene valor liquidado pendiente O
+      // 3. Tiene valor restante por pagar Y no está marcado como completado
+      if (!registro.fechaFinal || 
+          registro.valor_liquidado > 0 || 
+          ((registro.valor_total || 0) > (registro.valor_pagado || 0) && !registro.completandoServicio)) {
+        const key = `${registro.nombrePaciente}-${registro.servicio}`;
+        if (!serviciosPendientesTemp[key]) {
+          serviciosPendientesTemp[key] = [];
+        }
+        serviciosPendientesTemp[key].push(registro);
+        console.log('Servicio pendiente encontrado:', registro);
+      }
+    });
+    
+    console.log('Servicios pendientes actualizados:', serviciosPendientesTemp);
+    setServiciosPendientes(serviciosPendientesTemp);
+  }, [registros]);
+
+  useEffect(() => {
+    cargarServiciosPendientes();
+  }, [cargarServiciosPendientes, registros]);
+
+  const seleccionarServicioPendiente = (registro: DentalRecord) => {
+    setServicioACompletar(registro);
+    setMetodoPagoCompletar('Efectivo'); // Valor por defecto
+    setShowConfirmModal(true);
+  };
+
+  const completarServicioPendiente = async () => {
+    if (!servicioACompletar || !metodoPagoCompletar) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('No se encontró el token de autenticación. Por favor, inicie sesión nuevamente.');
+      return;
+    }
+
+    if (!id_sede) {
+      setError('No se encontró la sede seleccionada. Por favor, seleccione una sede.');
       return;
     }
 
     try {
-      console.log("Buscando servicios pendientes para el documento:", docId);
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      const grupo = serviciosPendientes[`${servicioACompletar.nombrePaciente}-${servicioACompletar.servicio}`] || [];
       
-      // Filtramos registros con valor_liquidado > 0 (tiene saldo pendiente)
-      const serviciosPendientesTemp = registros.filter(
-        (registro) => 
-          registro.docId === docId && 
-          registro.valor_liquidado > 0 &&
-          !registro.fechaFinal
-      );
-
-      if (serviciosPendientesTemp.length > 0) {
-        console.log(`Se encontraron ${serviciosPendientesTemp.length} servicios pendientes`);
-      } else {
-        console.log("No se encontraron servicios pendientes");
-      }
-
-      // Agrupamos por servicio para combinar múltiples registros del mismo servicio
-      const agrupados = serviciosPendientesTemp.reduce((acc, registro) => {
-        const key = registro.servicio;
-        if (!acc[key]) {
-          acc[key] = [];
+      // Obtener el id del método de pago
+      let idMetodo = null;
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/api/metodos-pago`,
+          {
+            params: { nombre: metodoPagoCompletar },
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (response.data && typeof response.data === 'object' && 'id_metodo' in response.data) {
+          idMetodo = response.data.id_metodo;
         }
-        acc[key].push(registro);
-        return acc;
-      }, {} as {[key: string]: DentalRecord[]});
-
-      Object.entries(agrupados).forEach(([servicio, registros]) => {
-        console.log(`Servicio pendiente: ${servicio}, Monto: ${formatCOP(registros[0]?.valor_liquidado || 0)}`);
-      });
-
-      setServiciosPendientes(agrupados);
-      // Si hay servicios pendientes, los mostramos automáticamente
-      if (Object.keys(agrupados).length > 0) {
-        console.log("Mostrando automáticamente servicios pendientes");
+      } catch (error) {
+        console.error('Error al obtener ID de método de pago:', error);
       }
 
-    } catch (error) {
-      console.error("Error al cargar servicios pendientes:", error);
-      setServiciosPendientes({});
-    }
-  }, [registros]);
-
-  // Cuando cambia el documento del paciente, cargamos sus servicios pendientes
-  useEffect(() => {
-    const currentTabData = tabs[activeTab];
-    if (currentTabData.docId) {
-      cargarServiciosPendientes(currentTabData.docId);
-    }
-  }, [tabs, activeTab, cargarServiciosPendientes]);
-
-  const seleccionarServicioPendiente = (servicio: string) => {
-    if (!serviciosPendientes[servicio]?.length) return;
-    
-    const registro = serviciosPendientes[servicio][0];
-    setSeleccionadoServicioPendiente(registro);
-    
-    updateTab(activeTab, (prev) => ({
-      ...prev,
-      servicio: [servicio],
-      nombrePaciente: registro.nombrePaciente,
-      docId: registro.docId,
-      nombreDoctor: registro.nombreDoctor,
-    }));
-
-    // Establecemos automáticamente el valor pendiente como valor a pagar
-    setValorPagado(registro.valor_liquidado.toString());
-    
-    // Hacemos scroll a la sección de método de pago para facilitar la completación
-    setTimeout(() => {
-      const metodoPagoElement = document.querySelector('[name="metodoPago"]');
-      if (metodoPagoElement) {
-        metodoPagoElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Actualizar todos los registros del grupo
+      for (const registro of grupo) {
+        const actualizacionRegistro = {
+          fechaFinal: fechaHoy,
+          valor_liquidado: 0, // Poner en 0 porque ya está pagado
+          valor_pagado: (registro.valor_pagado || 0) + (registro.valor_liquidado || 0), // Sumar el valor liquidado al pagado
+          id_metodo: idMetodo,
+          estado: false, // No marcar como liquidado
+          completandoServicio: true,
+          valor_total: registro.valor_total // Mantener el valor total original
+        };
+        
+        try {
+          await axios.put(
+            `${import.meta.env.VITE_API_URL}/api/records/${registro.id}`,
+            actualizacionRegistro,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+        } catch (error) {
+          console.error(`Error al actualizar registro ${registro.id}:`, error);
+          throw error;
+        }
       }
-    }, 100);
+      
+      // Actualizar registros localmente
+      const registrosActualizados = registros.map(r => 
+        grupo.some(rg => rg.id === r.id)
+          ? { 
+              ...r, 
+              fechaFinal: fechaHoy,
+              valor_liquidado: 0, // Poner en 0 porque ya está pagado
+              valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0), // Sumar el valor liquidado al pagado
+              metodoPago: metodoPagoCompletar,
+              estado: false, // No marcar como liquidado
+              completandoServicio: true,
+              valor_total: r.valor_total // Mantener el valor total original
+            } 
+          : r
+      );
+      
+      setRegistros(registrosActualizados);
+      
+      // Actualizar servicios pendientes
+      const nuevoServiciosPendientes = { ...serviciosPendientes };
+      delete nuevoServiciosPendientes[`${servicioACompletar.nombrePaciente}-${servicioACompletar.servicio}`];
+      setServiciosPendientes(nuevoServiciosPendientes);
+      
+      // Cerrar el modal
+      setShowCompletarModal(false);
+      setServicioACompletar(null);
+      
+      // Recargar los registros para asegurar que todo esté actualizado
+      try {
+        const response = await axios.get<DentalRecord[]>(`${import.meta.env.VITE_API_URL}/api/records`, {
+          params: { id_sede },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        // Filtrar solo los registros que realmente están pendientes
+        const filteredRecords = response.data.filter(
+          (record) => !record.fechaFinal || 
+                     (record.valor_liquidado || 0) > 0 || 
+                     ((record.valor_total || 0) > (record.valor_pagado || 0) && !record.completandoServicio)
+        );
+        setRegistros(filteredRecords);
+        
+        // Recalcular servicios pendientes
+        const registrosAgrupados = filteredRecords.reduce((acc: { [key: string]: DentalRecord[] }, registro) => {
+          // Solo agrupar si realmente está pendiente
+          if (!registro.fechaFinal || 
+              (registro.valor_liquidado || 0) > 0 || 
+              ((registro.valor_total || 0) > (registro.valor_pagado || 0) && !registro.completandoServicio)) {
+            const key = `${registro.nombrePaciente}-${registro.servicio}`;
+            if (!acc[key]) {
+              acc[key] = [];
+            }
+            acc[key].push(registro);
+          }
+          return acc; // Asegurarnos de retornar el acumulador
+        }, {} as { [key: string]: DentalRecord[] });s
+        
+        setServiciosPendientes(registrosAgrupados);
+      } catch (error) {
+        console.error('Error al recargar registros:', error);
+      }
+      
+      alert(`Servicio completado para ${servicioACompletar.nombrePaciente} con método de pago: ${metodoPagoCompletar}`);
+      
+      // Recargar los registros desde el servidor para asegurar sincronización
+      await fetchUpdatedRecords();
+      
+    } catch (err) {
+      console.error('Error al completar el servicio pendiente:', err);
+      setError('Error al completar el servicio. Por favor, intenta de nuevo.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -559,86 +655,55 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       }
 
       if (seleccionadoServicioPendiente) {
-        const registroId = seleccionadoServicioPendiente.id;
-        const valorPagadoNum = parseNumberInput(valorPagado);
-        
-        console.log(`Completando pago pendiente para servicio: ${seleccionadoServicioPendiente.servicio}`);
-        console.log(`Valor pendiente actual: ${formatCOP(seleccionadoServicioPendiente.valor_liquidado)}`);
-        console.log(`Valor a pagar ahora: ${formatCOP(valorPagadoNum)}`);
-        
-        // Verificamos si el pago actual completa el servicio
-        const completa = valorPagadoNum >= seleccionadoServicioPendiente.valor_liquidado;
-        
-        // Preparamos los datos a actualizar
-        const payload: Record<string, any> = {
-          id: registroId,
-          // Acumulamos el valor pagado
-          valor_pagado: seleccionadoServicioPendiente.valor_pagado + valorPagadoNum,
-          // Si completa el pago, ponemos el valor_liquidado en 0, sino restamos lo pagado
-          valor_liquidado: completa ? 0 : seleccionadoServicioPendiente.valor_liquidado - valorPagadoNum,
-          // Si completa el pago, actualizamos la fecha final
-          fechaFinal: completa ? fechaSeleccionada : null,
-          id_metodo: null
-        };
-        
-        console.log(`¿Pago completo? ${completa ? 'SÍ' : 'NO'}`);
-        console.log(`Nuevo valor pagado: ${formatCOP(payload.valor_pagado)}`);
-        console.log(`Valor restante: ${formatCOP(payload.valor_liquidado)}`);
-        
-        // Obtenemos el id del método de pago
-        if (currentTab.metodoPago) {
-          try {
-            const response = await axios.get(
-              `${import.meta.env.VITE_API_URL}/api/metodos-pago`,
+        try {
+          const fechaHoy = new Date().toISOString().split('T')[0];
+          const grupo = serviciosPendientes[`${seleccionadoServicioPendiente.nombrePaciente}-${seleccionadoServicioPendiente.servicio}`] || [];
+          
+          // Actualizar todos los registros del grupo
+          for (const registro of grupo) {
+            const actualizacionRegistro = {
+              id: registro.id,
+              fechaFinal: fechaHoy,
+              valor_liquidado: 0,
+              valor_pagado: (registro.valor_pagado || 0) + (registro.valor_liquidado || 0),
+              metodoPago: seleccionadoServicioPendiente.metodoPago,
+              estado: true
+            };
+            
+            await axios.put(
+              `${import.meta.env.VITE_API_URL}/api/records/${registro.id}`,
+              actualizacionRegistro,
               {
-                params: { nombre: currentTab.metodoPago },
                 headers: {
                   Authorization: `Bearer ${localStorage.getItem('token')}`,
                 },
               }
             );
-            // Tipamos correctamente la respuesta para manejar el id_metodo
-            interface MetodoPago {
-              id_metodo: number;
-              [key: string]: any;
-            }
-            
-            if (response.data && typeof response.data === 'object') {
-              const metodoPago = response.data as MetodoPago;
-              if ('id_metodo' in metodoPago) {
-                payload.id_metodo = metodoPago.id_metodo;
-              }
-            }
-          } catch (error) {
-            console.error('Error al obtener ID de método de pago:', error);
           }
-        }
-        
-        console.log('Actualizando servicio pendiente en la base de datos:', payload);
-        
-        try {
-          const updateResponse = await axios.put(
-            `${import.meta.env.VITE_API_URL}/api/records/${registroId}`,
-            payload,
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
-              },
-            }
+          
+          // Actualizar registros localmente
+          const registrosActualizados = registros.map(r => 
+            grupo.some(rg => rg.id === r.id)
+              ? { 
+                  ...r, 
+                  fechaFinal: fechaHoy, 
+                  valor_liquidado: 0,
+                  valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0),
+                  metodoPago: seleccionadoServicioPendiente.metodoPago,
+                  estado: true
+                } 
+              : r
           );
           
-          console.log('Servicio actualizado correctamente:', updateResponse.data);
-          
-          // Actualizamos la lista de registros
-          await fetchUpdatedRecords();
-          // Limpiamos el servicio seleccionado
-          setSeleccionadoServicioPendiente(null);
-          // Reseteamos el formulario
+          setRegistros(registrosActualizados);
+          cargarServiciosPendientes();
           resetForm();
+          setSeleccionadoServicioPendiente(null);
           
-          // Si el pago fue en efectivo, actualizamos la base de efectivo
-          if (currentTab.metodoPago === 'Efectivo') {
-            let newBaseEfectivo = baseEfectivo + valorPagadoNum;
+          // Si el pago fue en efectivo, actualizamos la base
+          if (seleccionadoServicioPendiente.metodoPago === 'Efectivo') {
+            const valorTotal = seleccionadoServicioPendiente.valor_liquidado || 0;
+            let newBaseEfectivo = baseEfectivo + valorTotal;
             try {
               const updatedBase = await updateCajaBase(id_sede, newBaseEfectivo);
               setBaseEfectivo(updatedBase);
@@ -649,13 +714,11 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
             }
           }
           
-          // Mostramos alerta de éxito
-          alert(`Pago ${completa ? 'completado' : 'parcial'} registrado con éxito para el servicio: ${seleccionadoServicioPendiente.servicio}. ${completa ? 'El servicio ha sido marcado como completado.' : 'Aún queda un saldo pendiente de ' + formatCOP(payload.valor_liquidado)}`);
-          
+          alert(`Servicio completado para ${seleccionadoServicioPendiente.nombrePaciente}`);
           return;
-        } catch (error) {
-          console.error('Error al actualizar el servicio pendiente:', error);
-          setError('Error al actualizar el servicio pendiente. Por favor, intenta de nuevo.');
+        } catch (err) {
+          console.error('Error al completar el servicio pendiente:', err);
+          setError('Error al completar el servicio. Por favor, intenta de nuevo.');
           return;
         }
       }
@@ -721,26 +784,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
       const newRecords = Array.isArray(response.data) ? response.data : [response.data];
       await fetchUpdatedRecords();
-
-      if (payload.metodoPago === 'Efectivo' || payload.metodoPagoAbono === 'Efectivo') {
-        let newBaseEfectivo = baseEfectivo;
-        if (payload.metodoPago === 'Efectivo' && payload.valorPagado) {
-          newBaseEfectivo += payload.valorPagado;
-        }
-        if (payload.metodoPagoAbono === 'Efectivo' && payload.abono) {
-          newBaseEfectivo += payload.abono;
-        }
-        try {
-          const updatedBase = await updateCajaBase(id_sede, newBaseEfectivo);
-          setBaseEfectivo(updatedBase);
-          setBaseInput(formatNumberInput(updatedBase.toString()));
-        } catch (err) {
-          console.error('Error al actualizar la base de efectivo:', err);
-          setErrorBase('Error al actualizar la base de efectivo.');
-        }
-      }
-
-      setSelectedRecords([]);
+      cargarServiciosPendientes();
       resetForm();
     } catch (err) {
       console.error('Error al guardar el registro:', err);
@@ -802,6 +846,29 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   };
 
   const registrosFiltrados = registros.filter((registro) => registro.fecha === fechaSeleccionada);
+
+  useEffect(() => {
+    const cargarMetodosPago = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/api/metodos-pago`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          }
+        );
+        if (response.data && Array.isArray(response.data)) {
+          const metodos = response.data.map((m: any) => m.descpMetodo);
+          setMetodosPago(metodos);
+        }
+      } catch (error) {
+        console.error('Error al cargar métodos de pago:', error);
+      }
+    };
+
+    cargarMetodosPago();
+  }, []);
 
   if (loading) return <div className="text-center py-6">Cargando datos...</div>;
   if (error && !loadingBase && !errorBase) return <div className="text-center py-6 text-red-500">{error}</div>;
@@ -1028,53 +1095,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
             )}
           </div>
 
-          {/* Servicios Pendientes para este paciente */}
-          {tabs[activeTab].docId && Object.keys(serviciosPendientes).length > 0 && (
-            <div className="mt-4 bg-yellow-50 p-4 border border-yellow-300 rounded-lg">
-              <div className="flex items-center justify-between">
-                <label className="block text-lg font-medium text-yellow-800 mb-2">
-                  ¡ATENCIÓN! Este paciente tiene servicios con pagos pendientes
-                </label>
-              </div>
-              
-              <div className="bg-white p-3 rounded-md border border-yellow-200 mb-4">
-                {Object.entries(serviciosPendientes).map(([servicio, registros]) => (
-                  <div key={servicio} className="flex items-center justify-between py-3 px-4 mb-2 border-b border-yellow-100 bg-yellow-50 rounded-md">
-                    <div>
-                      <p className="font-medium text-lg">{servicio}</p>
-                      <p className="text-md text-red-600 font-semibold">Pendiente de pago: {formatCOP(registros[0]?.valor_liquidado || 0)}</p>
-                      <p className="text-sm text-gray-600">Fecha de inicio: {registros[0]?.fecha}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => seleccionarServicioPendiente(servicio)}
-                      className="px-4 py-2 bg-blue-600 text-white text-md rounded-lg hover:bg-blue-700 font-medium shadow-sm"
-                    >
-                      Completar Pago
-                    </button>
-                  </div>
-                ))}
-              </div>
-              
-              {seleccionadoServicioPendiente && (
-                <div className="bg-green-50 p-4 rounded-md border-2 border-green-300 mb-4">
-                  <p className="font-bold text-green-800 text-lg">
-                    Completando pago para: {seleccionadoServicioPendiente.servicio}
-                  </p>
-                  <p className="text-md text-green-700 font-semibold my-2">
-                    Valor a pagar: {formatCOP(seleccionadoServicioPendiente.valor_liquidado)}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setSeleccionadoServicioPendiente(null)}
-                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Saldo a Favor</label>
@@ -1385,6 +1406,56 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         </div>
       </form>
 
+      <div className="mb-6">
+        <button
+          onClick={() => setMostrarServiciosPendientes(!mostrarServiciosPendientes)}
+          className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition-colors duration-200"
+        >
+          {mostrarServiciosPendientes ? 'Ocultar Servicios Pendientes' : 'Mostrar Servicios Pendientes'}
+        </button>
+      </div>
+
+      {mostrarServiciosPendientes && (
+        <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">Servicios Pendientes de Completar</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Doctor/Auxiliar</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Paciente</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Documento</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Servicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Valor Restante</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Fecha Inicio</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {Object.values(serviciosPendientes).flat().map((registro, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreDoctor}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombrePaciente}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.servicio}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado || 0)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <button
+                        onClick={() => seleccionarServicioPendiente(registro)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                      >
+                        Completar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white shadow-md rounded-lg">
         <div className="p-4">
           {isAdminOrOwner && (
@@ -1507,6 +1578,78 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           </table>
         </div>
       </div>
+
+      {showConfirmModal && servicioACompletar && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[80vh] overflow-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">
+                  Completar Servicio
+                </h3>
+                <button 
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    setServicioACompletar(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Paciente:</span> {servicioACompletar.nombrePaciente}
+                </p>
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Servicio:</span> {servicioACompletar.servicio}
+                </p>
+                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Valor Restante a Pagar:</span> {formatCOP(servicioACompletar.valor_liquidado || 0)}
+                </p>
+                
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Método de Pago
+                  </label>
+                  <select
+                    value={metodoPagoCompletar}
+                    onChange={(e) => setMetodoPagoCompletar(e.target.value)}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    {metodosPago.map((metodo) => (
+                      <option key={metodo} value={metodo}>
+                        {metodo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    setServicioACompletar(null);
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 focus:outline-none"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={completarServicioPendiente}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
+                >
+                  Completar y Registrar Pago
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

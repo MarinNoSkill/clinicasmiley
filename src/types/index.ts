@@ -24,6 +24,7 @@ export interface DentalRecord {
   titularCredito?: string | null; 
   esDatáfono?: boolean; 
   notas?: string | null;
+  completandoServicio?: boolean;
 }
 
 export interface Liquidacion {
