@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { DentalRecord } from '../types';
-import { fetchDoctors, fetchAssistants, fetchServices, formatCOP } from '../data/constants';
+import { fetchDoctors, fetchAssistants, fetchServices, fetchStadiumServices, formatCOP } from '../data/constants';
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,6 +42,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
   const [servicioACompletar, setServicioACompletar] = useState<DentalRecord | null>(null);
   const [metodoPagoCompletar, setMetodoPagoCompletar] = useState<string>('');
   const [metodosDisponibles, setMetodosDisponibles] = useState<string[]>([]);
+  const [usarPreciosEstadio, setUsarPreciosEstadio] = useState<boolean>(true);
 
   const navigate = useNavigate();
   const id_sede = localStorage.getItem('selectedSede');
@@ -59,10 +60,17 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       try {
         setLoading(true);
         console.log('Haciendo solicitud a /api/records con id_sede:', id_sede);
-        const [doctors, assistants, services, records] = await Promise.all([
+        
+        let servicesData;
+        if (id_sede === '2') {
+          servicesData = usarPreciosEstadio ? await fetchStadiumServices() : await fetchServices();
+        } else {
+          servicesData = await fetchServices();
+        }
+        
+        const [doctors, assistants, records] = await Promise.all([
           fetchDoctors(id_sede),
           fetchAssistants(id_sede),
-          fetchServices(),
           axios.get(`${import.meta.env.VITE_API_URL}/api/records`, {
             params: { id_sede },
             headers: {
@@ -73,12 +81,12 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
 
         console.log('Doctores cargados:', doctors);
         console.log('Asistentes cargados:', assistants);
-        console.log('Servicios cargados:', services);
+        console.log('Servicios cargados:', servicesData);
         console.log('Registros obtenidos:', records.data);
 
         setDoctores(doctors);
         setAsistentes(assistants);
-        setServicios(services);
+        setServicios(servicesData);
         setDoctorSeleccionado(doctors[0] || assistants[0] || '');
 
         const filteredRecords = (records.data as DentalRecord[]).filter(
@@ -88,7 +96,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         setRegistros(filteredRecords);
         
         // Cargar costos de laboratorio para todos los servicios
-        await cargarTodosLosLaboratorios(services);
+        await cargarTodosLosLaboratorios(servicesData);
       } catch (err) {
         console.error('Error al cargar los datos:', err);
         setError('Error al cargar los datos. Por favor, intenta de nuevo.');
@@ -99,7 +107,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
     };
 
     loadData();
-  }, [setRegistros, id_sede, navigate, token]);
+  }, [setRegistros, id_sede, navigate, token, usarPreciosEstadio]);
 
   // Función para cargar todos los costos de laboratorio
   const cargarTodosLosLaboratorios = async (servicios: { nombre: string; precio: number }[]) => {
@@ -606,6 +614,38 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       <h2 className="text-3xl font-bold text-gray-800 mb-8">Liquidación - Clínica Smiley</h2>
 
       <div className="bg-white shadow-md rounded-lg p-5 mb-6 border border-teal-200">
+        {id_sede === '2' && (
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="text-lg font-medium text-blue-800 mb-2">Precios Sede Estadio</h3>
+            <div className="flex items-center">
+              <div className="flex items-center mr-4">
+                <input
+                  id="precios-estadio"
+                  type="radio"
+                  checked={usarPreciosEstadio}
+                  onChange={() => setUsarPreciosEstadio(true)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="precios-estadio" className="ml-2 text-sm font-medium text-gray-700">
+                  Usar precios de Estadio
+                </label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="precios-estandar"
+                  type="radio"
+                  checked={!usarPreciosEstadio}
+                  onChange={() => setUsarPreciosEstadio(false)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="precios-estandar" className="ml-2 text-sm font-medium text-gray-700">
+                  Usar precios estándar de la clínica
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">¿Es auxiliar?</label>
