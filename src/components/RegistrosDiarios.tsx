@@ -35,7 +35,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [error, setError] = useState<string>('');
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
   const [usarPreciosEstadio, setUsarPreciosEstadio] = useState<boolean>(true);
-
   const [tabs, setTabs] = useState<FormData[]>([
     {
       nombreDoctor: '',
@@ -78,6 +77,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [seleccionadoServicioPendiente, setSeleccionadoServicioPendiente] = useState<DentalRecord | null>(null);
   const [mostrarServiciosPendientes, setMostrarServiciosPendientes] = useState<boolean>(false);
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [pendingPayload, setPendingPayload] = useState<any>(null);
   const [servicioACompletar, setServicioACompletar] = useState<DentalRecord | null>(null);
   const [metodoPagoCompletar, setMetodoPagoCompletar] = useState<string>('');
   const [showCompletarModal, setShowCompletarModal] = useState<boolean>(false);
@@ -111,6 +111,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
     e.currentTarget.blur();
   };
+
   const handleAddAbono = async () => {
     const abonoValue = parseNumberInput(abonoModalInput);
     if (abonoValue <= 0) {
@@ -130,7 +131,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         }
       );
 
-      // Actualizar el saldo a favor con el nuevo total
       setSaldoAFavor(response.data.tot_abono);
       setShowAbonoModal(false);
       setAbonoModalInput('0');
@@ -140,6 +140,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       setError('Error al agregar abono. Por favor, intenta de nuevo.');
     }
   };
+
   const loadCajaBase = useCallback(async () => {
     if (id_sede) {
       setLoadingBase(true);
@@ -358,8 +359,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     setSaldoAFavor(paciente.tot_abono || 0);
     setPacientesCoincidentes([]);
     setMostrarListaPacientes(false);
-
-    // Buscamos inmediatamente servicios pendientes para este paciente
     cargarServiciosPendientes();
   };
 
@@ -479,9 +478,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
     const serviciosPendientesTemp: { [key: string]: DentalRecord[] } = {};
 
     registros.forEach((registro) => {
-      // Un servicio está pendiente si:
-      // 1. Tiene valor restante por pagar O
-      // 2. No tiene fecha final
       if ((registro.valor_liquidado > 0) || !registro.fechaFinal) {
         const key = `${registro.nombrePaciente}-${registro.servicio}`;
         if (!serviciosPendientesTemp[key]) {
@@ -502,8 +498,8 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
   const seleccionarServicioPendiente = (registro: DentalRecord) => {
     setServicioACompletar(registro);
-    setMetodoPagoCompletar('Efectivo'); // Valor por defecto
-    setShowConfirmModal(true);
+    setMetodoPagoCompletar('Efectivo');
+    setShowCompletarModal(true);
   };
 
   const completarServicioPendiente = async () => {
@@ -524,7 +520,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       const fechaHoy = new Date().toISOString().split('T')[0];
       const grupo = serviciosPendientes[`${servicioACompletar.nombrePaciente}-${servicioACompletar.servicio}`] || [];
 
-      // Obtener el id del método de pago
       let idMetodo = null;
       try {
         const response = await axios.get(
@@ -543,16 +538,15 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         console.error('Error al obtener ID de método de pago:', error);
       }
 
-      // Actualizar todos los registros del grupo
       for (const registro of grupo) {
         const actualizacionRegistro = {
           fechaFinal: fechaHoy,
-          valor_liquidado: 0, // Poner en 0 porque ya está pagado
-          valor_pagado: (registro.valor_pagado || 0) + (registro.valor_liquidado || 0), // Sumar el valor liquidado al pagado
+          valor_liquidado: 0,
+          valor_pagado: (registro.valor_pagado || 0) + (registro.valor_liquidado || 0),
           id_metodo: idMetodo,
-          estado: false, // No marcar como liquidado
+          estado: false,
           completandoServicio: true,
-          valor_total: registro.valor_total // Mantener el valor total original
+          valor_total: registro.valor_total
         };
 
         try {
@@ -571,43 +565,37 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         }
       }
 
-      // Actualizar registros localmente
       const registrosActualizados = registros.map(r =>
         grupo.some(rg => rg.id === r.id)
           ? {
-            ...r,
-            fechaFinal: fechaHoy,
-            valor_liquidado: 0, // Poner en 0 porque ya está pagado
-            valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0), // Sumar el valor liquidado al pagado
-            metodoPago: metodoPagoCompletar,
-            estado: false, // No marcar como liquidado
-            completandoServicio: true,
-            valor_total: r.valor_total // Mantener el valor total original
-          }
+              ...r,
+              fechaFinal: fechaHoy,
+              valor_liquidado: 0,
+              valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0),
+              metodoPago: metodoPagoCompletar,
+              estado: false,
+              completandoServicio: true,
+              valor_total: r.valor_total
+            }
           : r
       );
 
       setRegistros(registrosActualizados);
 
-      // Actualizar servicios pendientes
       const nuevoServiciosPendientes = { ...serviciosPendientes };
       delete nuevoServiciosPendientes[`${servicioACompletar.nombrePaciente}-${servicioACompletar.servicio}`];
       setServiciosPendientes(nuevoServiciosPendientes);
 
-      // Cerrar el modal
       setShowCompletarModal(false);
       setServicioACompletar(null);
 
-      // Recargar los registros desde el servidor para asegurar sincronización
       await fetchUpdatedRecords();
 
-      // Si el pago fue en efectivo, actualizar la base
       if (metodoPagoCompletar === 'Efectivo') {
         await loadCajaBase();
       }
 
       alert(`Servicio completado para ${servicioACompletar.nombrePaciente} con método de pago: ${metodoPagoCompletar}`);
-
     } catch (err) {
       console.error('Error al completar el servicio pendiente:', err);
       setError('Error al completar el servicio. Por favor, intenta de nuevo.');
@@ -655,7 +643,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           const fechaHoy = new Date().toISOString().split('T')[0];
           const grupo = serviciosPendientes[`${seleccionadoServicioPendiente.nombrePaciente}-${seleccionadoServicioPendiente.servicio}`] || [];
 
-          // Actualizar todos los registros del grupo
           for (const registro of grupo) {
             const actualizacionRegistro = {
               id: registro.id,
@@ -677,17 +664,16 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
             );
           }
 
-          // Actualizar registros localmente
           const registrosActualizados = registros.map(r =>
             grupo.some(rg => rg.id === r.id)
               ? {
-                ...r,
-                fechaFinal: fechaHoy,
-                valor_liquidado: 0,
-                valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0),
-                metodoPago: seleccionadoServicioPendiente.metodoPago,
-                estado: true
-              }
+                  ...r,
+                  fechaFinal: fechaHoy,
+                  valor_liquidado: 0,
+                  valor_pagado: (r.valor_pagado || 0) + (r.valor_liquidado || 0),
+                  metodoPago: seleccionadoServicioPendiente.metodoPago,
+                  estado: true
+                }
               : r
           );
 
@@ -696,7 +682,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           resetForm();
           setSeleccionadoServicioPendiente(null);
 
-          // Si el pago fue en efectivo, actualizamos la base
           if (seleccionadoServicioPendiente.metodoPago === 'Efectivo') {
             const valorTotal = seleccionadoServicioPendiente.valor_liquidado || 0;
             let newBaseEfectivo = baseEfectivo + valorTotal;
@@ -768,7 +753,19 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         notas: currentTab.notas || null,
       };
 
-      console.log('Enviando payload:', payload);
+      setPendingPayload(payload);
+      setShowConfirmModal(true);
+    } catch (err) {
+      console.error('Error al preparar el registro:', err);
+      setError('Error al preparar el registro. Por favor, intenta de nuevo.');
+    }
+  };
+
+  const handleConfirm = async (completado: boolean) => {
+    if (!pendingPayload) return;
+
+    try {
+      const payload = { ...pendingPayload, completado };
 
       const response = await axios.post<DentalRecord | DentalRecord[]>(
         `${import.meta.env.VITE_API_URL}/api/records`,
@@ -782,15 +779,22 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       await fetchUpdatedRecords();
       cargarServiciosPendientes();
 
-      // Actualizar la base si el pago fue en efectivo
-      if ((currentTab.metodoPago === 'Efectivo' && valorPagado) || (metodoPagoAbono === 'Efectivo' && parseNumberInput(abonoInput))) {
+      if (
+        (payload.metodoPago === 'Efectivo' && valorPagado) ||
+        (payload.metodoPagoAbono === 'Efectivo' && parseNumberInput(abonoInput))
+      ) {
         await loadCajaBase();
       }
 
       resetForm();
+      setShowConfirmModal(false);
+      setPendingPayload(null);
+      alert('Registro guardado exitosamente.');
     } catch (err) {
       console.error('Error al guardar el registro:', err);
       setError('Error al guardar el registro. Por favor, intenta de nuevo.');
+      setShowConfirmModal(false);
+      setPendingPayload(null);
     }
   };
 
@@ -923,7 +927,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       )}
 
       <div className="mb-4">
-        <div className="flex items-center space-x-1 border-b border-gray-200 ">
+        <div className="flex items-center space-x-1 border-b border-gray-200">
           {tabs.map((_, index) => (
             <div key={index} className="relative flex items-center">
               <button
@@ -931,10 +935,11 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   setActiveTab(index);
                   resetStates();
                 }}
-                className={`flex items-center px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 ${activeTab === index
-                  ? 'bg-white text-teal-700 border border-b-0 border-gray-200'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 ${
+                  activeTab === index
+                    ? 'bg-white text-teal-700 border border-b-0 border-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
               >
                 Registro {index + 1}
                 {tabs.length > 1 && (
@@ -1095,8 +1100,6 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               </div>
             )}
           </div>
-
-
 
           <div>
             <div className="flex items-center space-x-2 mb-2">
@@ -1369,8 +1372,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                   value={formatNumberInput(baseInput)}
                   onChange={(e) => isAdminOrOwner && setBaseInput(e.target.value.replace(/[^0-9]/g, ''))}
                   onWheel={handleWheel}
-                  className={`w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 pr-8 ${!isAdminOrOwner ? 'bg-gray-100 cursor-not-allowed' : ''
-                    }`}
+                  className={`w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 pr-8 ${
+                    !isAdminOrOwner ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
                   disabled={!isAdminOrOwner || loadingBase}
                   readOnly={!isAdminOrOwner}
                   placeholder={loadingBase ? 'Cargando...' : ''}
@@ -1593,6 +1597,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           </table>
         </div>
       </div>
+
       {showAbonoModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
@@ -1645,7 +1650,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         </div>
       )}
 
-      {showConfirmModal && servicioACompletar && (
+      {showCompletarModal && servicioACompletar && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[80vh] overflow-auto">
             <div className="p-6">
@@ -1655,7 +1660,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 </h3>
                 <button
                   onClick={() => {
-                    setShowConfirmModal(false);
+                    setShowCompletarModal(false);
                     setServicioACompletar(null);
                   }}
                   className="text-gray-500 hover:text-gray-700 focus:outline-none"
@@ -1673,22 +1678,23 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 <p className="text-gray-700 mb-4">
                   <span className="font-semibold">Servicio:</span> {servicioACompletar.servicio}
                 </p>
-                <p className="text-gray-700 mb-4">
-                  <span className="font-semibold">Valor Restante a Pagar:</span> {formatCOP(servicioACompletar.valor_liquidado || 0)}
+                                <p className="text-gray-700 mb-4">
+                  <span className="font-semibold">Valor Restante:</span> {formatCOP(servicioACompletar.valor_liquidado || 0)}
                 </p>
-
-                <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Método de Pago
-                  </label>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
                   <select
                     value={metodoPagoCompletar}
                     onChange={(e) => setMetodoPagoCompletar(e.target.value)}
                     className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    required
                   >
+                    <option value="">Selecciona un método de pago</option>
                     {metodosPago.map((metodo) => (
                       <option key={metodo} value={metodo}>
-                        {metodo}
+                        {metodo === 'Datáfono' ? 'Datáfono (Tarjeta crédito / Tarjeta débito)' :
+                         metodo === 'Crédito' ? 'Crédito (DataCredito, SisteCredito, Addi)' :
+                         metodo}
                       </option>
                     ))}
                   </select>
@@ -1698,8 +1704,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => {
-                    setShowConfirmModal(false);
+                    setShowCompletarModal(false);
                     setServicioACompletar(null);
+                    setMetodoPagoCompletar('');
                   }}
                   className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 focus:outline-none"
                 >
@@ -1708,10 +1715,46 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 <button
                   onClick={completarServicioPendiente}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
+                  disabled={!metodoPagoCompletar}
                 >
-                  Completar y Registrar Pago
+                  Completar Servicio
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">Confirmar Registro</h3>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="text-gray-500 hover:text-gray-700 focus:outline-none"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-gray-700 mb-4">
+              ¿Desea marcar este servicio como completado?
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => handleConfirm(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
+              >
+                No, mantener pendiente
+              </button>
+              <button
+                onClick={() => handleConfirm(true)}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none"
+              >
+                Sí, marcar como completado
+              </button>
             </div>
           </div>
         </div>
