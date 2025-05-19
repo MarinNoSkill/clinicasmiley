@@ -480,12 +480,9 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
     registros.forEach((registro) => {
       // Un servicio está pendiente si:
-      // 1. No tiene fecha final O
-      // 2. Tiene valor liquidado pendiente O
-      // 3. Tiene valor restante por pagar Y no está marcado como completado
-      if (!registro.fechaFinal ||
-        registro.valor_liquidado > 0 ||
-        ((registro.valor_total || 0) > (registro.valor_pagado || 0) && !registro.completandoServicio)) {
+      // 1. Tiene valor restante por pagar O
+      // 2. No tiene fecha final
+      if ((registro.valor_liquidado > 0) || !registro.fechaFinal) {
         const key = `${registro.nombrePaciente}-${registro.servicio}`;
         if (!serviciosPendientesTemp[key]) {
           serviciosPendientesTemp[key] = [];
@@ -612,26 +609,22 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
         // Filtrar solo los registros que realmente están pendientes
         const filteredRecords = response.data.filter(
-          (record) => !record.fechaFinal ||
-            (record.valor_liquidado || 0) > 0 ||
-            ((record.valor_total || 0) > (record.valor_pagado || 0) && !record.completandoServicio)
+          (record) => (record.valor_liquidado || 0) > 0 || !record.fechaFinal
         );
         setRegistros(filteredRecords);
 
         // Recalcular servicios pendientes
         const registrosAgrupados = filteredRecords.reduce((acc: { [key: string]: DentalRecord[] }, registro) => {
           // Solo agrupar si realmente está pendiente
-          if (!registro.fechaFinal ||
-            (registro.valor_liquidado || 0) > 0 ||
-            ((registro.valor_total || 0) > (registro.valor_pagado || 0) && !registro.completandoServicio)) {
+          if ((registro.valor_liquidado || 0) > 0 || !registro.fechaFinal) {
             const key = `${registro.nombrePaciente}-${registro.servicio}`;
             if (!acc[key]) {
               acc[key] = [];
             }
             acc[key].push(registro);
           }
-          return acc; // Asegurarnos de retornar el acumulador
-        }, {} as { [key: string]: DentalRecord[] }); s
+          return acc;
+        }, {} as { [key: string]: DentalRecord[] });
 
         setServiciosPendientes(registrosAgrupados);
       } catch (error) {
