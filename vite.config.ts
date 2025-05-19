@@ -43,7 +43,21 @@ export default defineConfig({
   preview: {
     port: 5173,
   },
-  optimizeDeps: {
-    exclude: ['lucide-react'],
+  build: {
+    rollupOptions: {
+      external: ['lucide-react'],
+      output: {
+        manualChunks: undefined
+      }
+    },
+    commonjsOptions: {
+      include: [/node_modules/],
+      extensions: ['.js', '.cjs']
+    },
+    target: 'esnext',
+    sourcemap: false
   },
+  optimizeDeps: {
+    exclude: ['lucide-react']
+  }
 });
