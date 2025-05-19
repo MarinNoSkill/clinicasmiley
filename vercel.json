@@ -4,5 +4,8 @@
         "source": "/(.*)",
         "destination": "/index.html"
       }
-    ]
+    ],
+    "buildCommand": "npm run build",
+    "installCommand": "npm install --force",
+    "framework": "vite"
   }
