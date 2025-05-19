@@ -60,10 +60,11 @@ const GestionPersonal = () => {
           Authorization: `Bearer ${token}`
         };
         
-        // Usamos valores fijos para roles (1: Doctor, 2: Auxiliar)
+        // Usamos valores fijos para roles (1: Doctor, 2: Auxiliar, 3: Especialista)
         const rolesData = [
           { id_rol: 1, descrip_rol: 'Doctores' },
-          { id_rol: 2, descrip_rol: 'Auxiliares' }
+          { id_rol: 2, descrip_rol: 'Auxiliares' },
+          { id_rol: 3, descrip_rol: 'Especialista' }
         ];
         
         const [doctoresRes, auxiliaresRes, sedesRes] = await Promise.all([
@@ -412,7 +413,7 @@ const GestionPersonal = () => {
                         {sedes.find(sede => sede.id_sede === doctor.id_sede)?.sede || doctor.id_sede}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                        {roles.find(rol => rol.id_rol === doctor.id_rol)?.descrip_rol || doctor.id_rol}
+                        {doctor.id_rol === 3 ? 'Especialista' : roles.find(rol => rol.id_rol === doctor.id_rol)?.descrip_rol || doctor.id_rol}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <button
@@ -462,7 +463,9 @@ const GestionPersonal = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                         {roles.find(rol => rol.id_rol === auxiliar.id_rol)?.descrip_rol || auxiliar.id_rol}
                       </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{auxiliar.id_porc}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {auxiliar.id_porc === 4 ? '20%' : auxiliar.id_porc === 3 ? '10%' : `${auxiliar.id_porc}%`}
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <button
                           onClick={() => {
