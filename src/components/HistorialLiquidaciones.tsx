@@ -134,8 +134,6 @@ const HistorialLiquidaciones: React.FC = () => {
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
-
-
   const handleDescargarExcel = (liquidacion: LiquidacionHistorial) => {
     const datos = liquidacion.servicios.map((registro) => ({
       Paciente: registro.paciente,
@@ -146,7 +144,9 @@ const HistorialLiquidaciones: React.FC = () => {
       Descuento: formatCOP(registro.dcto),
       'Valor Total': formatCOP(registro.valor_total),
       'Es Paciente Propio': registro.es_paciente_propio ? 'Sí' : 'No',
-      Porcentaje: registro.porcentaje ? `${registro.porcentaje}%` : 'N/A',
+      Porcentaje: registro.porcentaje !== null ? 
+        `${registro.id_porc === 3 ? 60 : registro.porcentaje}%` : 
+        (registro.es_paciente_propio ? '50%' : '40%'),
       'Método de Pago': registro.metodoPago || 'N/A',
       'Método de Pago Abono': registro.metodoPagoAbono || 'N/A',
       'Valor Pagado': formatCOP(registro.valor_pagado),
@@ -335,7 +335,9 @@ const HistorialLiquidaciones: React.FC = () => {
                         {registro.es_paciente_propio ? 'Sí' : 'No'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {registro.porcentaje ? `${registro.porcentaje}%` : 'N/A'}
+                        {registro.porcentaje !== null ? 
+                          `${registro.id_porc === 3 ? 60 : registro.porcentaje}%` : 
+                          (registro.es_paciente_propio ? '50%' : '40%')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {registro.metodoPago || 'N/A'}

@@ -26,6 +26,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
   const [doctores, setDoctores] = useState<string[]>([]);
   const [asistentes, setAsistentes] = useState<string[]>([]);
+  const [especialistas, setEspecialistas] = useState<string[]>([]);
   const [servicios, setServicios] = useState<{ nombre: string; precio: number }[]>([]);
   const [metodosPago, setMetodosPago] = useState<string[]>(['Efectivo', 'Transferencia', 'Datáfono', 'Crédito']);
   const [cuentas, setCuentas] = useState<{ id_cuenta: number; cuentas: string }[]>([]);
@@ -52,6 +53,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const [activeTab, setActiveTab] = useState<number>(0);
   const [esAuxiliar, setEsAuxiliar] = useState<boolean>(false);
   const [esPacientePropio, setEsPacientePropio] = useState<boolean>(false);
+  const [esEspecialista, setEsEspecialista] = useState<boolean>(false);
   const [aplicarDescuento, setAplicarDescuento] = useState<boolean>(false);
   const [descuentoInput, setDescuentoInput] = useState<string>('0');
   const [esPorcentaje, setEsPorcentaje] = useState<boolean>(false);
@@ -191,6 +193,21 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
           fetchAccounts(id_sede),
         ]);
 
+        // Obtener especialistas
+        try {
+          const especialistasResponse = await axios.get(
+            `${import.meta.env.VITE_API_URL}/api/doctors/especialistas`,
+            {
+              params: { id_sede },
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            }
+          );
+          setEspecialistas(especialistasResponse.data || []);
+        } catch (error) {
+          console.error('Error al cargar especialistas:', error);
+          setEspecialistas([]);
+        }
+
         setDoctores(doctors);
         setAsistentes(assistants);
         setServicios(servicesData);
@@ -219,6 +236,13 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       }));
     }
   }, [esAuxiliar]);
+
+  // Actualizar cuando cambia el estado de especialista
+  useEffect(() => {
+    if (esEspecialista) {
+      setEsPacientePropio(false);
+    }
+  }, [esEspecialista]);
 
   useEffect(() => {
     const metodoPago = tabs[activeTab].metodoPago;
@@ -366,6 +390,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
   const resetStates = () => {
     setEsAuxiliar(false);
     setEsPacientePropio(false);
+    setEsEspecialista(false);
     setAplicarDescuento(false);
     setDescuentoInput('0');
     setEsPorcentaje(false);
@@ -759,6 +784,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
         metodoPago: currentTab.metodoPago,
         id_cuenta: currentTab.metodoPago === 'Transferencia' ? idCuenta : null,
         esAuxiliar: esAuxiliar,
+        esEspecialista: esEspecialista, // Nueva propiedad
         id_sede: parseInt(id_sede, 10),
         valorPagado: currentTab.metodoPago ? parseNumberInput(valorPagado) : null,
         montoPrestado: currentTab.metodoPago === 'Crédito' ? parseNumberInput(montoPrestado) : null,
@@ -975,6 +1001,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               onChange={(e) => {
                 setEsAuxiliar(e.target.checked);
                 setEsPacientePropio(false);
+                setEsEspecialista(false);
               }}
               className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
@@ -1355,8 +1382,31 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
               <input
                 type="checkbox"
                 checked={esPacientePropio}
-                onChange={(e) => setEsPacientePropio(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                onChange={(e) => {
+                  setEsPacientePropio(e.target.checked);
+                  if (e.target.checked) {
+                    setEsEspecialista(false);
+                  }
+                }}
+                disabled={esEspecialista}
+                className={`rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${esEspecialista ? 'opacity-50 cursor-not-allowed' : ''}`}
+              />
+            </div>
+          )}
+          {!esAuxiliar && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">¿Es Especialista?</label>
+              <input
+                type="checkbox"
+                checked={esEspecialista}
+                onChange={(e) => {
+                  setEsEspecialista(e.target.checked);
+                  if (e.target.checked) {
+                    setEsPacientePropio(false);
+                  }
+                }}
+                disabled={esPacientePropio}
+                className={`rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${esPacientePropio ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
           )}

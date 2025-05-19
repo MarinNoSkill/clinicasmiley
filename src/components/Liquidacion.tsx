@@ -223,6 +223,10 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
       return porcentaje;
     }
     const idPorc = grupo[0].idPorc;
+    if (idPorc === 3) {
+      console.log(`Calculando porcentaje para grupo especialista, porcentaje: 0.60`);
+      return 0.60;
+    }
     const porcentaje = idPorc === 2 ? 0.50 : 0.40;
     console.log(`Calculando porcentaje para grupo doctor, idPorc: ${idPorc}, porcentaje: ${porcentaje}`);
     return porcentaje;
@@ -272,7 +276,11 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         console.log(`Porcentaje obtenido de API: ${porcentaje}`);
       } catch (error) {
         console.error('Error al obtener el porcentaje:', error);
-        porcentaje = idPorc === 2 ? 0.50 : 0.40;
+        porcentaje = idPorc === 3 
+          ? 0.60 
+          : idPorc === 2 
+            ? 0.50 
+            : 0.40;
         console.log(`Usando porcentaje por defecto: ${porcentaje}`);
       }
     }
@@ -425,6 +433,8 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
         ? grupo[0].esPacientePropio
           ? 20
           : 10
+        : grupo[0].idPorc === 3
+        ? 60
         : grupo[0].idPorc === 2
         ? 50
         : 40;
@@ -461,7 +471,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
             : 'Propio (50%)'
           : esAuxiliar
           ? 'Clínica (10%)'
-          : 'Clínica (40%)',
+          : grupo[0].idPorc === 3
+            ? 'Especialista (60%)'
+            : 'Clínica (40%)',
         Porcentaje: `${porcentaje}%`,
         'Fecha Inicio': registro.fecha,
         'Fecha Final': registro.fechaFinal || 'Pendiente',
@@ -840,9 +852,11 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                     ? grupo[0].esPacientePropio
                       ? 20
                       : 10
-                    : grupo[0].idPorc === 2
-                    ? 50
-                    : 40;
+                    : grupo[0].idPorc === 3
+                      ? 60
+                      : grupo[0].idPorc === 2
+                        ? 50
+                        : 40;
                   const totalALiquidar = totalAjustado * (porcentaje / 100);
 
                   return (
@@ -889,7 +903,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                             : 'Propio (50%)'
                           : esAuxiliar
                           ? 'Clínica (10%)'
-                          : 'Clínica (40%)'}
+                          : grupo[0].idPorc === 3
+                            ? 'Especialista (60%)'
+                            : 'Clínica (40%)'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
@@ -954,9 +970,11 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                     ? grupo[0].esPacientePropio
                       ? 20
                       : 10
-                    : grupo[0].idPorc === 2
-                    ? 50
-                    : 40;
+                    : grupo[0].idPorc === 3
+                      ? 60
+                      : grupo[0].idPorc === 2
+                        ? 50
+                        : 40;
                   const totalALiquidar = totalAjustado * (porcentaje / 100);
 
                   return (
@@ -1003,7 +1021,9 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                             : 'Propio (50%)'
                           : esAuxiliar
                           ? 'Clínica (10%)'
-                          : 'Clínica (40%)'}
+                          : grupo[0].idPorc === 3
+                            ? 'Especialista (60%)'
+                            : 'Clínica (40%)'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
@@ -1012,120 +1032,17 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.notas || 'N/A'}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <button
-                          onClick={() => handleLiquidarGrupo([registro])}
-                          className="px-4 py-2 rounded-md text-white font-medium bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200"
-                        >
-                          Liquidar
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {serviciosPendientes.length > 0 && (
-        <div className="bg-white shadow-lg rounded-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Servicios Pendientes de Completar</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Doctor/Auxiliar</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Paciente</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Documento</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Servicio</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Progreso Sesiones</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Abono</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago Abono</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Descuento</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px]">Método de Pago</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Total Pagado</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Total</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Valor Restante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Tipo de Paciente</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Porcentaje</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Inicio</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Fecha Final</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Notas</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[100px]">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {serviciosPendientes.flat().map((registro, index) => {
-                  const grupo = serviciosPendientes.find((g) =>
-                    g.some((r) => r.id === registro.id)
-                  )!;
-                  const servicioNombre = grupo[0].servicio;
-                  const servicio = servicios.find((s) => s.nombre === servicioNombre);
-                  const precioServicio = servicio ? servicio.precio : 0;
-                  const sesionesCompletadas = grupo.every((r) => r.fechaFinal !== null)
-                    ? grupo[0].sesiones
-                    : grupo.length;
-                  const totalGrupo = precioServicio * sesionesCompletadas;
-                  const sesionesTotales = grupo[0].sesiones || 1;
-                  const costoLaboratorio = costosLaboratorio[servicioNombre] || 0;
-                  const porcentaje = esAuxiliar
-                    ? grupo[0].esPacientePropio
-                      ? 20
-                      : 10
-                    : grupo[0].idPorc === 2
-                    ? 50
-                    : 40;
-
-                  return (
-                    <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombreDoctor}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.nombrePaciente}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.docId}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <span>{registro.servicio}</span>
-                          {costoLaboratorio > 0 && (
-                            <button 
-                              onClick={() => abrirDetallesLaboratorio(servicioNombre)}
-                              className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                              title="Ver detalles de laboratorio"
-                            >
-                              (Ver lab)
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{`${sesionesCompletadas}/${sesionesTotales}`}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.abono ?? 0)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {registro.metodoPagoAbono ? `${registro.metodoPagoAbono} (${formatCOP(registro.abono ?? 0)})` : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.descuento ?? 0)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {registro.metodoPago ? `${registro.metodoPago} (${formatCOP(registro.valor_pagado)})` : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(totalGrupo)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(precioServicio)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCOP(registro.valor_liquidado)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {grupo[0].esPacientePropio
-                          ? esAuxiliar
-                            ? 'Propio (20%)'
-                            : 'Propio (50%)'
-                          : esAuxiliar
-                          ? 'Clínica (10%)'
-                          : 'Clínica (40%)'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{porcentaje}%</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fecha}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.fechaFinal || 'Pendiente'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{registro.notas || 'N/A'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <button
-                          onClick={() => abrirModalCompletarServicio(registro)}
+                          onClick={() => {
+                            const grupo = serviciosCompletados.find((g) =>
+                              g.some((r) => r.id === registro.id)
+                            );
+                            if (grupo) {
+                              handleLiquidarGrupo(grupo);
+                            }
+                          }}
                           className="px-4 py-2 rounded-md text-white font-medium bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
                         >
-                          Completar
+                          Liquidar
                         </button>
                       </td>
                     </tr>
@@ -1218,7 +1135,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-semibold text-gray-800">
-                  Completar Servicio
+                  Liquidar Servicio
                 </h3>
                 <button 
                   onClick={() => setShowCompletarModal(false)}
@@ -1270,7 +1187,7 @@ const Liquidacion: React.FC<LiquidacionProps> = ({ registros, setRegistros }) =>
                   onClick={() => handleCompletarServicio(servicioACompletar)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none"
                 >
-                  Completar y Registrar Pago
+                  Liquidar y Registrar Pago
                 </button>
               </div>
             </div>
