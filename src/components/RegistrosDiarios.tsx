@@ -598,43 +598,15 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       setShowCompletarModal(false);
       setServicioACompletar(null);
 
-      // Recargar los registros para asegurar que todo esté actualizado
-      try {
-        const response = await axios.get<DentalRecord[]>(`${import.meta.env.VITE_API_URL}/api/records`, {
-          params: { id_sede },
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+      // Recargar los registros desde el servidor para asegurar sincronización
+      await fetchUpdatedRecords();
 
-        // Filtrar solo los registros que realmente están pendientes
-        const filteredRecords = response.data.filter(
-          (record) => (record.valor_liquidado || 0) > 0 || !record.fechaFinal
-        );
-        setRegistros(filteredRecords);
-
-        // Recalcular servicios pendientes
-        const registrosAgrupados = filteredRecords.reduce((acc: { [key: string]: DentalRecord[] }, registro) => {
-          // Solo agrupar si realmente está pendiente
-          if ((registro.valor_liquidado || 0) > 0 || !registro.fechaFinal) {
-            const key = `${registro.nombrePaciente}-${registro.servicio}`;
-            if (!acc[key]) {
-              acc[key] = [];
-            }
-            acc[key].push(registro);
-          }
-          return acc;
-        }, {} as { [key: string]: DentalRecord[] });
-
-        setServiciosPendientes(registrosAgrupados);
-      } catch (error) {
-        console.error('Error al recargar registros:', error);
+      // Si el pago fue en efectivo, actualizar la base
+      if (metodoPagoCompletar === 'Efectivo') {
+        await loadCajaBase();
       }
 
       alert(`Servicio completado para ${servicioACompletar.nombrePaciente} con método de pago: ${metodoPagoCompletar}`);
-
-      // Recargar los registros desde el servidor para asegurar sincronización
-      await fetchUpdatedRecords();
 
     } catch (err) {
       console.error('Error al completar el servicio pendiente:', err);
@@ -798,7 +770,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
 
       console.log('Enviando payload:', payload);
 
-      const response = await axios.post(
+      const response = await axios.post<DentalRecord | DentalRecord[]>(
         `${import.meta.env.VITE_API_URL}/api/records`,
         payload,
         {
@@ -809,6 +781,12 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
       const newRecords = Array.isArray(response.data) ? response.data : [response.data];
       await fetchUpdatedRecords();
       cargarServiciosPendientes();
+
+      // Actualizar la base si el pago fue en efectivo
+      if ((currentTab.metodoPago === 'Efectivo' && valorPagado) || (metodoPagoAbono === 'Efectivo' && parseNumberInput(abonoInput))) {
+        await loadCajaBase();
+      }
+
       resetForm();
     } catch (err) {
       console.error('Error al guardar el registro:', err);
