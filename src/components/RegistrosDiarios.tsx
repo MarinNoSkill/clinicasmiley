@@ -944,7 +944,7 @@ const RegistrosDiarios: React.FC<RegistrosDiariosProps> = ({ registros, setRegis
                 className="w-4 h-4 text-blue-600 focus:ring-blue-500"
               />
               <label htmlFor="precios-estandar" className="ml-2 text-sm font-medium text-gray-700">
-                Usar precios estándar de la clínica
+                Usar precios de Smiley
               </label>
             </div>
           </div>

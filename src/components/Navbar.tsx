@@ -219,7 +219,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLogout }) => {
                   {isServiciosMenuOpen && (
                     <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
                        <div className="py-1" role="menu" aria-orientation="vertical">
-                        <NavLink to="/estandarizacion" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Estandarización</NavLink>
+                        <NavLink to="/estandarizacion" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Servicios Smiley</NavLink>
                         <NavLink to="/gestion-personal" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Gestión Personal</NavLink>
                         {isEstadioSede && (<NavLink to="/servicios-estadio" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-700'} hover:bg-gray-100 hover:text-gray-900`} role="menuitem" onClick={() => setIsServiciosMenuOpen(false)}>Servicios Estadio</NavLink>)}
                        </div>
