@@ -193,8 +193,11 @@ const RegistroGasto: React.FC = () => {
       return;
     }
 
+    const formattedDate = gasto.fecha;
+
     const payload: GastoPayload = {
       ...gasto,
+      fecha: formattedDate,
       concepto: gasto.concepto === "Otro" ? conceptoPersonalizado : gasto.concepto,
       id_sede,
     };

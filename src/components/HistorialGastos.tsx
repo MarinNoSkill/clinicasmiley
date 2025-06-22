@@ -84,14 +84,16 @@ const HistorialGastos = () => {
       let filtered = [...gastos];
 
       if (filters.fechaInicio) {
-        filtered = filtered.filter(
-          (g) => new Date(g.fecha) >= new Date(filters.fechaInicio)
-        );
+        filtered = filtered.filter((g) => {
+          const fechaGasto = g.fecha.split('T')[0];
+          return fechaGasto >= filters.fechaInicio;
+        });
       }
       if (filters.fechaFinal) {
-        filtered = filtered.filter(
-          (g) => new Date(g.fecha) <= new Date(filters.fechaFinal)
-        );
+        filtered = filtered.filter((g) => {
+          const fechaGasto = g.fecha.split('T')[0];
+          return fechaGasto <= filters.fechaFinal;
+        });
       }
       if (filters.concepto) {
         filtered = filtered.filter((g) =>
@@ -123,16 +125,22 @@ const HistorialGastos = () => {
   };
 
   const handleDescargarExcel = () => {
-    const datos = filteredGastos.map((gasto) => ({
-      ID: gasto.id,
-      Concepto: gasto.concepto,
-      Proveedor: gasto.proveedor,
-      "Tipo de Gasto": gasto.tipo_gasto,
-      Monto: `$${gasto.monto.toFixed(2)}`,
-      Fecha: new Date(gasto.fecha).toLocaleDateString("es-ES"),
-      Responsable: gasto.responsable,
-      Comentario: gasto.comentario || "-",
-    }));
+    const datos = filteredGastos.map((gasto) => {
+      // Parse the date without timezone adjustment
+      const [year, month, day] = gasto.fecha.split('T')[0].split('-');
+      const formattedDate = `${day}/${month}/${year}`;
+      
+      return {
+        ID: gasto.id,
+        Concepto: gasto.concepto,
+        Proveedor: gasto.proveedor,
+        "Tipo de Gasto": gasto.tipo_gasto,
+        Monto: `$${gasto.monto.toFixed(2)}`,
+        Fecha: formattedDate,
+        Responsable: gasto.responsable,
+        Comentario: gasto.comentario || "-",
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(datos);
     const workbook = XLSX.utils.book_new();
@@ -319,7 +327,11 @@ const HistorialGastos = () => {
                       ${gasto.monto.toFixed(2)}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(gasto.fecha).toLocaleDateString("es-ES")}
+                      {(() => {
+                        // Parse the date without timezone adjustment
+                        const [year, month, day] = gasto.fecha.split('T')[0].split('-');
+                        return `${day}/${month}/${year}`;
+                      })()}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                       {gasto.responsable}
